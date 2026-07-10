@@ -1,0 +1,30 @@
+app = "pckt-pds-operator"
+primary_region = "sjc"
+
+[build]
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8787"
+  PDS_HOSTNAME = "pds.pckt.cafe"
+  RELAY_HOSTNAME = "bsky.network"
+  APPVIEW_URL = "https://bsky.app"
+  DASHBOARD_URL = "https://operator.pckt.cafe"
+  DB_PATH = "/data/data.sqlite"
+  AUDIT_LOG_PATH = "/data/audit.log"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # the syncer's streams and DM alerts need the machine always on
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

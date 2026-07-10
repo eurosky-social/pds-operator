@@ -1,0 +1,715 @@
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --border: #d8d8d8;
+  --text: #161616;
+  --text-dim: #6b6b6b;
+  --ok: #1a7a4c;
+  --warn: #a5690a;
+  --error: #b0281f;
+  --accent: #161616;
+  --radius: 2px;
+  --shadow: rgba(0, 0, 0, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101112;
+    --surface: #16181a;
+    --border: #2c2f33;
+    --text: #e7e7e7;
+    --text-dim: #8a8f94;
+    --ok: #4fbf85;
+    --warn: #d9a441;
+    --error: #e2685c;
+    --accent: #e7e7e7;
+    --shadow: rgba(0, 0, 0, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Menlo", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--text);
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+
+input {
+  font-size: 16px;
+}
+
+button {
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--text);
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0;
+  text-transform: lowercase;
+}
+
+.header .sub {
+  color: var(--text-dim);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* relay stats sit directly on the page, no panel chrome; side padding lines the
+   stats up with the panels' inner content (16px panel + 10px cell padding) */
+.status-panel {
+  padding: 8px 16px;
+  margin-bottom: 24px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* request crawl lives in the nav on desktop, above the stats on mobile */
+.crawl-row.nav-crawl {
+  margin-top: 0;
+  flex-direction: row-reverse; /* feedback message to the button's left */
+  white-space: nowrap;
+}
+
+.crawl-row.panel-crawl {
+  display: none;
+  margin-top: 16px;
+}
+
+@media (max-width: 640px) {
+  .crawl-row.nav-crawl {
+    display: none;
+  }
+
+  .crawl-row.panel-crawl {
+    display: flex; /* full-width button; message wraps below */
+  }
+}
+
+.panel h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  padding-left: 10px;
+}
+
+.skeleton {
+  display: inline-block;
+  width: 4em;
+  height: 1.2em;
+  margin: 0.15em 0; /* fill out the line box so nothing shifts when real values land */
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.sync-footer {
+  margin-top: 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.crawl-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat .label {
+  color: var(--text-dim);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stat .value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat .value.ok {
+  color: var(--ok);
+}
+
+.stat .value.warn {
+  color: var(--warn);
+}
+
+.stat .value.error {
+  color: var(--error);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+th {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+tr:hover td {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.login-screen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 240px;
+}
+
+.error-text {
+  color: var(--error);
+  font-size: 12px;
+}
+
+.mono-dim {
+  color: var(--text-dim);
+}
+
+/* line empty-state copy up with table cell text (th/td have 10px side padding) */
+.empty-state {
+  padding-left: 10px;
+}
+
+@media (max-width: 640px) {
+  .empty-state {
+    padding-left: 0; /* mobile cards are flush left */
+  }
+}
+
+.handle-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.handle-link {
+  text-decoration: none;
+}
+
+.handle-link:hover {
+  text-decoration: underline;
+}
+
+.labels {
+  color: var(--error);
+  font-size: 12px;
+  margin-left: 28px; /* align under the handle text, past the avatar */
+  overflow-wrap: anywhere;
+}
+
+.avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+td.status-cell {
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+td.status-cell.ok {
+  color: var(--ok);
+}
+
+td.status-cell.warn {
+  color: var(--warn);
+}
+
+td.status-cell.error {
+  color: var(--error);
+}
+
+.menu-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+button.kebab {
+  padding: 2px 8px;
+  line-height: 1.4;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 160px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px var(--shadow);
+}
+
+.menu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.menu button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.menu button.danger {
+  color: var(--error);
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 2px;
+}
+
+.accounts-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.page-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.toast {
+  position: fixed;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px var(--shadow);
+  z-index: 30;
+  max-width: calc(100vw - 16px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: toast-in 150ms ease-out;
+  transition: transform 450ms ease, opacity 450ms ease, top 300ms ease;
+  pointer-events: none;
+}
+
+.toast.leaving {
+  transform: translateX(-50%) translateY(-16px);
+  opacity: 0;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.invite-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.passkey-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 10px 6px 10px;
+}
+
+@media (max-width: 640px) {
+  .passkey-row {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+.passkey-row span:first-child {
+  flex: 1;
+}
+
+.passkey-add {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.passkey-add input {
+  flex: 1;
+}
+
+.did-cell .email {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.accounts-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.search-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+}
+
+.search-wrap input {
+  width: 100%;
+}
+
+/* custom clear button replaces the browser's built-in one */
+.search-wrap input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.clear-search {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  color: var(--text-dim);
+}
+
+.clear-search:hover:not(:disabled) {
+  border: none;
+  color: var(--text);
+}
+
+.accounts-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* stack account rows into cards: handle / did / status+indexed+menu */
+@media (max-width: 640px) {
+  /* key-value list: label left, value right */
+  .status-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding-left: 0;
+  }
+
+  .status-grid .stat {
+    flex-direction: row;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  /* leader line from label to value */
+  .status-grid .stat::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+    margin: 0 8px;
+    order: 1;
+  }
+
+  .status-grid .stat .value {
+    order: 0;
+  }
+
+  .status-grid .stat .label {
+    order: 2;
+  }
+
+  .stat .value {
+    font-size: 14px;
+  }
+
+  .crawl-row button {
+    width: 100%;
+  }
+
+  .accounts-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .accounts-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .accounts-footer button {
+    width: 100%;
+  }
+
+  .accounts-footer .page-size {
+    justify-content: flex-end;
+  }
+
+  button.wide-mobile {
+    width: 100%;
+  }
+
+  thead {
+    display: none;
+  }
+
+  table,
+  tbody {
+    display: block;
+  }
+
+  tbody tr {
+    display: grid;
+    column-gap: 12px;
+    row-gap: 2px;
+    align-items: center;
+    padding: 10px 0;
+  }
+
+  tbody td {
+    display: block;
+    border-left: none;
+    padding: 0;
+  }
+
+  tbody tr:hover td {
+    background: none;
+  }
+
+  /* accounts: handle / did+email / status+indexed+menu */
+  .accounts-table tbody tr {
+    grid-template-columns: max-content 1fr max-content;
+    grid-template-areas:
+      "handle handle handle"
+      "did    did    did"
+      "status indexed menu";
+  }
+
+  .accounts-table tbody td:nth-child(1) {
+    grid-area: handle;
+  }
+
+  /* indent under the handle text: avatar 20px + 8px gap */
+  .accounts-table tbody td:nth-child(2) {
+    grid-area: did;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    margin-left: 28px;
+  }
+
+  .accounts-table tbody td:nth-child(3) {
+    grid-area: status;
+    max-width: none;
+    margin-left: 28px;
+  }
+
+  .accounts-table tbody td:nth-child(4) {
+    grid-area: indexed;
+  }
+
+  .accounts-table tbody td:nth-child(5) {
+    grid-area: menu;
+    justify-self: end;
+  }
+
+  /* invites: code / uses+created+actions — actions at the right edge like the
+     accounts context menu */
+  .invites-table tbody tr {
+    grid-template-columns: max-content 1fr max-content;
+    grid-template-areas:
+      "code code    code"
+      "uses created actions";
+  }
+
+  .invites-table tbody td:nth-child(1) {
+    grid-area: code;
+    overflow-wrap: anywhere;
+  }
+
+  .invites-table tbody td:nth-child(2) {
+    grid-area: uses;
+  }
+
+  .invites-table tbody td:nth-child(3) {
+    grid-area: created;
+  }
+
+  .invites-table tbody td:nth-child(4) {
+    grid-area: actions;
+    justify-self: end;
+  }
+
+  /* audit log: action+when / target / operator */
+  .audit-table tbody tr {
+    grid-template-columns: 1fr max-content;
+    grid-template-areas:
+      "action   when"
+      "target   target"
+      "operator operator";
+  }
+
+  .audit-table tbody td:nth-child(1) {
+    grid-area: when;
+    justify-self: end;
+  }
+
+  .audit-table tbody td:nth-child(2) {
+    grid-area: action;
+  }
+
+  .audit-table tbody td:nth-child(3) {
+    grid-area: target;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+  }
+
+  .audit-table tbody td:nth-child(4) {
+    grid-area: operator;
+    font-size: 12px;
+  }
+}
