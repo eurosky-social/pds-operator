@@ -23,7 +23,7 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyDid, setBusyDid] = useState<string | null>(null);
-  const [confirmDid, setConfirmDid] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ did: string; action: "status" | "reset" } | null>(null);
   const [menuDid, setMenuDid] = useState<string | null>(null);
   const [passwordResult, setPasswordResult] = useState<{ handle: string; password: string } | null>(
     null,
@@ -44,7 +44,7 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
     const close = (e: MouseEvent | KeyboardEvent) => {
       if (e instanceof KeyboardEvent && e.key !== "Escape") return;
       setMenuDid(null);
-      setConfirmDid(null);
+      setConfirm(null);
     };
     document.addEventListener("click", close);
     document.addEventListener("keydown", close);
@@ -101,7 +101,7 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
 
   const runAction = async (did: string, action: "takedown" | "enable" | "resetPassword") => {
     setBusyDid(did);
-    setConfirmDid(null);
+    setConfirm(null);
     try {
       if (action === "resetPassword") {
         const { password } = await api.resetPassword(did);
@@ -172,26 +172,29 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
             disabled={busyDid === a.did}
             onClick={() => {
               setMenuDid(menuDid === a.did ? null : a.did);
-              setConfirmDid(null);
+              setConfirm(null);
             }}
           >
             ⋯
           </button>
           {menuDid === a.did && (
             <div className="menu" role="menu">
-              {confirmDid === a.did ? (
+              {confirm?.did === a.did ? (
                 <>
                   <button
                     className="danger"
                     role="menuitem"
                     onClick={() => {
                       setMenuDid(null);
-                      runAction(a.did, a.status === "takendown" ? "enable" : "takedown");
+                      if (confirm.action === "reset") runAction(a.did, "resetPassword");
+                      else runAction(a.did, a.status === "takendown" ? "enable" : "takedown");
                     }}
                   >
-                    confirm {a.status === "takendown" ? "enable" : "takedown"}
+                    {confirm.action === "reset"
+                      ? "confirm reset password"
+                      : `confirm ${a.status === "takendown" ? "enable" : "takedown"}`}
                   </button>
-                  <button role="menuitem" onClick={() => setConfirmDid(null)}>
+                  <button role="menuitem" onClick={() => setConfirm(null)}>
                     cancel
                   </button>
                 </>
@@ -218,15 +221,15 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
                     </button>
                   )}
                   <div className="menu-sep" />
-                  <button role="menuitem" onClick={() => setConfirmDid(a.did)}>
+                  <button
+                    role="menuitem"
+                    onClick={() => setConfirm({ did: a.did, action: "status" })}
+                  >
                     {a.status === "takendown" ? "enable" : "takedown"}
                   </button>
                   <button
                     role="menuitem"
-                    onClick={() => {
-                      setMenuDid(null);
-                      runAction(a.did, "resetPassword");
-                    }}
+                    onClick={() => setConfirm({ did: a.did, action: "reset" })}
                   >
                     reset password
                   </button>
