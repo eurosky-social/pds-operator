@@ -149,8 +149,8 @@ export function registerAccountRoutes(
 
   app.post("/api/accounts/:did/reset-password", { preHandler: requireAuth }, async (req) => {
     const { did } = req.params as { did: string };
-    await pds.resetAccountPassword(did);
+    const { password } = await pds.resetAccountPassword(did);
     await recordAction({ operator: req.session.operator!, action: "reset-password", target: did });
-    return { ok: true };
+    return { ok: true, password };
   });
 }

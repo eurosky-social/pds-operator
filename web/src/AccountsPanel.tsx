@@ -25,6 +25,9 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
   const [busyDid, setBusyDid] = useState<string | null>(null);
   const [confirmDid, setConfirmDid] = useState<string | null>(null);
   const [menuDid, setMenuDid] = useState<string | null>(null);
+  const [passwordResult, setPasswordResult] = useState<{ handle: string; password: string } | null>(
+    null,
+  );
   const [toast, showToast] = useToast();
 
   const copy = (text: string, what: string, e: React.MouseEvent) => {
@@ -50,6 +53,15 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
       document.removeEventListener("keydown", close);
     };
   }, [menuDid]);
+
+  useEffect(() => {
+    if (!passwordResult) return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPasswordResult(null);
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [passwordResult]);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -91,7 +103,13 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
     setBusyDid(did);
     setConfirmDid(null);
     try {
-      await api[action](did);
+      if (action === "resetPassword") {
+        const { password } = await api.resetPassword(did);
+        const handle = accounts.find((a) => a.did === did)?.handle ?? did;
+        setPasswordResult({ handle, password });
+      } else {
+        await api[action](did);
+      }
       refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -305,6 +323,27 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
           </label>
         </div>
         {toast}
+        {passwordResult && (
+          <div className="modal-backdrop" onClick={() => setPasswordResult(null)}>
+            <div
+              className="modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`new password for ${passwordResult.handle}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3>password reset for @{passwordResult.handle}</h3>
+              <div className="password-box">{passwordResult.password}</div>
+              <p className="modal-warn">
+                this password won&rsquo;t be shown again — copy it now.
+              </p>
+              <div className="modal-actions">
+                <button onClick={(e) => copy(passwordResult.password, "password", e)}>copy</button>
+                <button onClick={() => setPasswordResult(null)}>close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

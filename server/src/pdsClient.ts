@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import WebSocket from "ws";
 import { decodeMultiple } from "cbor-x";
 
@@ -134,11 +135,13 @@ export class PdsClient {
     });
   }
 
-  async resetAccountPassword(did: string) {
-    return this.xrpc("com.atproto.admin.sendAccountPasswordResetEmail", {
+  async resetAccountPassword(did: string): Promise<{ password: string }> {
+    const password = randomBytes(16).toString("base64url");
+    await this.xrpc("com.atproto.admin.updateAccountPassword", {
       method: "POST",
-      body: JSON.stringify({ did }),
+      body: JSON.stringify({ did, password }),
     });
+    return { password };
   }
 
   /**

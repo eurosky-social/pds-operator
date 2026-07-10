@@ -56,7 +56,7 @@ export const api = {
   },
   takedown: (did: string) => req<{ ok: true }>(`/api/accounts/${encodeURIComponent(did)}/takedown`, { method: "POST" }),
   enable: (did: string) => req<{ ok: true }>(`/api/accounts/${encodeURIComponent(did)}/enable`, { method: "POST" }),
-  resetPassword: (did: string) => req<{ ok: true }>(`/api/accounts/${encodeURIComponent(did)}/reset-password`, { method: "POST" }),
+  resetPassword: (did: string) => req<{ ok: true; password: string }>(`/api/accounts/${encodeURIComponent(did)}/reset-password`, { method: "POST" }),
   cursorStatus: () => req<CursorStatus>("/api/status/cursor"),
   requestCrawl: () => req<{ ok: true }>("/api/status/request-crawl", { method: "POST" }),
   passkeyRegisterOptions: (enrollToken?: string) =>

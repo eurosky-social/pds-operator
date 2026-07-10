@@ -443,6 +443,56 @@ button.kebab {
   }
 }
 
+/* sits above menus (20) but below the toast (30) so "copied" feedback shows */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--shadow) 55%, transparent);
+}
+
+.modal {
+  width: 100%;
+  max-width: 28rem;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px var(--shadow);
+}
+
+.modal h3 {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.password-box {
+  font-family: monospace;
+  font-size: 15px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.modal-warn {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin: 10px 0 14px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .invite-actions {
   display: flex;
   gap: 6px;
