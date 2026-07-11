@@ -46,6 +46,16 @@ Run it again any time to enroll another device, or as recovery if all passkeys a
 `server/.env` and generate the hash with
 `node -e "console.log(require('bcryptjs').hashSync('<password>', 10))"`.
 
+### Other PDS implementations
+
+The reference PDS authenticates admin calls with `PDS_ADMIN_PASSWORD` over basic auth.
+For implementations without an admin password, like
+[tranquil-pds](https://tangled.org/tranquil.farm/tranquil-pds), set
+`PDS_ADMIN_IDENTIFIER` to the handle of an account with admin rights and put that
+account's password in `PDS_ADMIN_PASSWORD`. The dashboard then signs in as that account
+and sends bearer tokens instead. Sign-in is headless, so use an app password or keep 2FA
+off that account.
+
 ### Labelers
 
 `server/labelers.json` (gitignored, copy `server/labelers.json.example`):

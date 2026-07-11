@@ -164,7 +164,13 @@ async function setup() {
   }
 
   const pdsHostname = await ask("pds hostname (e.g. pds.example.com)");
-  const pdsAdminPassword = await askHidden("pds admin password");
+  console.log("\nreference pds: leave the handle empty, sign in with the admin password.");
+  console.log("pds without an admin password (e.g. tranquil-pds): give an admin account's");
+  console.log("handle, then its password (an app password works and sidesteps 2fa).");
+  const pdsAdminIdentifier = await ask("admin account handle (empty for admin password auth)", "");
+  const pdsAdminPassword = await askHidden(
+    pdsAdminIdentifier ? "admin account password" : "pds admin password",
+  );
   const relayHostname = await ask("relay hostname", "bsky.network");
   const appviewUrl = await ask("appview url for profile links", "https://bsky.app");
   const dashboardUrl = await ask("dashboard url (used in DM deep links)", "http://localhost:5173");
@@ -186,6 +192,7 @@ async function setup() {
   const lines = [
     `PDS_HOSTNAME=${pdsHostname}`,
     `PDS_ADMIN_PASSWORD=${pdsAdminPassword}`,
+    `PDS_ADMIN_IDENTIFIER=${pdsAdminIdentifier}`,
     `RELAY_HOSTNAME=${relayHostname}`,
     operatorPassword
       ? `OPERATOR_PASSWORD_HASH=${bcrypt.hashSync(operatorPassword, 10)}`
@@ -225,7 +232,7 @@ primary_region = "${region}"
   HOST = "0.0.0.0"
   PORT = "8787"
   PDS_HOSTNAME = "${pdsHostname}"
-  RELAY_HOSTNAME = "${relayHostname}"
+${pdsAdminIdentifier ? `  PDS_ADMIN_IDENTIFIER = "${pdsAdminIdentifier}"\n` : ""}  RELAY_HOSTNAME = "${relayHostname}"
   APPVIEW_URL = "${appviewUrl}"
   DASHBOARD_URL = "${flyUrl.replace(/\/$/, "")}"
   DB_PATH = "/data/data.sqlite"

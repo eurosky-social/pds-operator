@@ -24,6 +24,7 @@ import { BskyDmNotifier } from "./notifier.js";
 const {
   PDS_HOSTNAME,
   PDS_ADMIN_PASSWORD,
+  PDS_ADMIN_IDENTIFIER,
   RELAY_HOSTNAME,
   OPERATOR_PASSWORD_HASH,
   SESSION_SECRET,
@@ -75,7 +76,7 @@ await app.register(fastifySession, {
   },
 });
 
-const pds = new PdsClient(PDS_HOSTNAME!, PDS_ADMIN_PASSWORD!);
+const pds = new PdsClient(PDS_HOSTNAME!, PDS_ADMIN_PASSWORD!, PDS_ADMIN_IDENTIFIER || undefined);
 const relay = new RelayClient(RELAY_HOSTNAME!);
 // labelers.json: [{ "name"?, "did", "labels": [...] }] — labels empty/omitted means all labels flag.
 // Falls back to LABELER_DID / FLAG_LABELS env vars if the file doesn't exist.

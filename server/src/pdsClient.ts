@@ -36,25 +36,55 @@ export interface AdminAccount {
 }
 
 export class PdsClient {
+  private accessJwt: string | null = null;
+
   constructor(
     public readonly hostname: string,
     private adminPassword: string,
+    /**
+     * When set, admin calls sign in as this account (which must have admin rights on the
+     * PDS) and send bearer tokens instead of `admin:<password>` basic auth. Needed for
+     * PDS implementations without an admin password, e.g. tranquil-pds. adminPassword is
+     * then this account's password — an app password works and sidesteps 2FA.
+     */
+    private adminIdentifier?: string,
   ) {}
 
-  private authHeader() {
+  private async ensureSession(): Promise<string> {
+    if (this.accessJwt) return this.accessJwt;
+    const res = await fetch(`https://${this.hostname}/xrpc/com.atproto.server.createSession`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: this.adminIdentifier, password: this.adminPassword }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`PDS admin sign-in as ${this.adminIdentifier} failed: ${res.status} ${body}`);
+    }
+    const { accessJwt } = (await res.json()) as { accessJwt: string };
+    this.accessJwt = accessJwt;
+    return accessJwt;
+  }
+
+  private async authHeader() {
+    if (this.adminIdentifier) return `Bearer ${await this.ensureSession()}`;
     const token = Buffer.from(`admin:${this.adminPassword}`).toString("base64");
     return `Basic ${token}`;
   }
 
-  private async xrpc(path: string, opts: RequestInit = {}) {
+  private async xrpc(path: string, opts: RequestInit = {}, retry = true): Promise<any> {
     const res = await fetch(`https://${this.hostname}/xrpc/${path}`, {
       ...opts,
       headers: {
         ...opts.headers,
-        Authorization: this.authHeader(),
+        Authorization: await this.authHeader(),
         "Content-Type": "application/json",
       },
     });
+    if (res.status === 401 && this.adminIdentifier && retry) {
+      this.accessJwt = null; // token expired — re-auth once
+      return this.xrpc(path, opts, false);
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(`PDS ${path} failed: ${res.status} ${body}`);
