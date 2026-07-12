@@ -41,7 +41,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Menlo", monospace;
+  font-family: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", "Menlo", monospace;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -63,7 +63,7 @@ select {
 }
 
 input {
-  font-size: 16px;
+  font-size: 16px; /* below 16 iOS Safari zooms on focus */
 }
 
 button {
@@ -106,9 +106,8 @@ button.danger:hover:not(:disabled) {
 }
 
 .header h1 {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 15px;
+  font-weight: 500;
   margin: 0;
   text-transform: lowercase;
 }
@@ -160,13 +159,12 @@ button.danger:hover:not(:disabled) {
   }
 }
 
+/* type scale: 3 sizes only. 14 body and labels, 15 section titles, 16 panel titles and stat values (inputs pinned at 16 so iOS Safari does not zoom on focus) */
 .panel h2 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 16px;
   color: var(--text-dim);
   margin: 0 0 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .status-grid {
@@ -200,7 +198,7 @@ button.danger:hover:not(:disabled) {
   margin-top: 24px;
   text-align: center;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .crawl-row {
@@ -219,13 +217,11 @@ button.danger:hover:not(:disabled) {
 
 .stat .label {
   color: var(--text-dim);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 14px;
 }
 
 .stat .value {
-  font-size: 20px;
+  font-size: 20px; /* display tier: the relay numbers are the page's headline */
   font-variant-numeric: tabular-nums;
 }
 
@@ -239,6 +235,182 @@ button.danger:hover:not(:disabled) {
 
 .stat .value.error {
   color: var(--error);
+}
+
+/* inline value-label pairs, e.g. "3 ACTIVE  307 DORMANT" */
+.stats-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  align-items: baseline;
+  margin-bottom: 24px;
+}
+
+.stats-strip .pair {
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.stats-strip .value {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-strip .label {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* section titles inside panels */
+.chart-title {
+  display: block;
+  color: var(--text-dim);
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 72px;
+}
+
+.chart-bars.dense {
+  gap: 1px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.chart-bar {
+  flex: 1;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--text) 35%, transparent);
+  transition: background-color 120ms ease;
+}
+
+/* click pops the period's count as a toast */
+.chart-bar:hover {
+  background: color-mix(in srgb, var(--text) 60%, transparent);
+}
+
+.chart-bar.zero:hover {
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+.chart-bar.zero {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.chart-months {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.chart-months span {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.inline-counts {
+  margin-top: 24px;
+}
+
+/* name in text color, count dim — same treatment as most active */
+.inline-counts .inline-count {
+  display: inline-block;
+  font-size: 14px;
+  color: var(--text);
+  margin-right: 16px;
+}
+
+.inline-counts .inline-count b {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.inline-count.with-avatar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-count.with-avatar .avatar {
+  width: 16px;
+  height: 16px;
+}
+
+/* most-active entries are buttons that search the accounts panel */
+button.inline-count {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+button.inline-count:hover {
+  text-decoration: underline;
+}
+
+
+.chart {
+  margin-top: 24px;
+}
+
+.chart-empty {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* second year of the split 24-month mobile view */
+.chart-half {
+  margin-top: 12px;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+}
+
+@media (max-width: 640px) {
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* thin out month labels when they crowd: 24-month view, or any view on mobile.
+   sparse day labels are already thinned, so they keep every mark */
+.chart-months.dense span:nth-child(even) {
+  visibility: hidden;
+}
+
+.chart-months.sparse span {
+  white-space: nowrap;
+  overflow: visible;
+}
+
+@media (max-width: 640px) {
+  .chart-months:not(.sparse) span:nth-child(even) {
+    visibility: hidden;
+  }
 }
 
 table {
@@ -255,10 +427,8 @@ td {
 
 th {
   color: var(--text-dim);
-  font-weight: 500;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: 400;
+  font-size: 14px;
 }
 
 tr:hover td {
@@ -281,7 +451,7 @@ tr:hover td {
 
 .error-text {
   color: var(--error);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .mono-dim {
@@ -315,7 +485,7 @@ tr:hover td {
 
 .labels {
   color: var(--error);
-  font-size: 12px;
+  font-size: 14px;
   margin-left: 28px; /* align under the handle text, past the avatar */
   overflow-wrap: anywhere;
 }
@@ -472,7 +642,7 @@ button.kebab {
 
 .password-box {
   font-family: monospace;
-  font-size: 15px;
+  font-size: 14px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -483,7 +653,7 @@ button.kebab {
 
 .modal-warn {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 14px;
   margin: 10px 0 14px;
 }
 
@@ -588,14 +758,25 @@ button.kebab {
     padding-left: 0;
   }
 
-  .status-grid .stat {
+  /* stats strip becomes the same key-value list */
+  .stats-strip {
+    flex-direction: column;
+    align-items: stretch; /* full-width rows so the leader line has room */
+    gap: 0;
+  }
+
+  /* shared key-value row: value left, leader line, label right */
+  .kv {
+    display: flex;
     flex-direction: row;
     align-items: center;
+    width: 100%;
+    gap: 0;
+    margin: 0;
     padding: 4px 0;
   }
 
-  /* leader line from label to value */
-  .status-grid .stat::after {
+  .kv::after {
     content: "";
     flex: 1;
     height: 1px;
@@ -604,15 +785,13 @@ button.kebab {
     order: 1;
   }
 
-  .status-grid .stat .value {
+  .kv .value {
     order: 0;
+    font-size: 14px;
   }
 
-  .status-grid .stat .label {
+  .kv .label {
     order: 2;
-  }
-
-  .stat .value {
     font-size: 14px;
   }
 
@@ -684,12 +863,19 @@ button.kebab {
     grid-area: handle;
   }
 
-  /* indent under the handle text: avatar 20px + 8px gap */
+  /* indent under the handle text: avatar 20px + 8px gap. Off-scale 13px so the
+     full DID fits a phone width; ellipsis catches the narrowest screens */
   .accounts-table tbody td:nth-child(2) {
     grid-area: did;
-    overflow-wrap: anywhere;
-    font-size: 12px;
+    font-size: 13px;
     margin-left: 28px;
+    min-width: 0;
+  }
+
+  .accounts-table tbody td:nth-child(2) div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .accounts-table tbody td:nth-child(3) {
@@ -755,11 +941,11 @@ button.kebab {
   .audit-table tbody td:nth-child(3) {
     grid-area: target;
     overflow-wrap: anywhere;
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .audit-table tbody td:nth-child(4) {
     grid-area: operator;
-    font-size: 12px;
+    font-size: 14px;
   }
 }

@@ -66,7 +66,7 @@ export function InvitesPanel() {
   return (
     <div className="panel">
       <h2 style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        invite codes ({shown.length})
+        Invite Codes ({shown.length})
         <label
           style={{
             display: "flex",
@@ -96,9 +96,9 @@ export function InvitesPanel() {
         <table className="invites-table">
           <thead>
             <tr>
-              <th>code</th>
-              <th>uses</th>
-              <th>created</th>
+              <th>Code</th>
+              <th>Uses</th>
+              <th>Created</th>
               <th></th>
             </tr>
           </thead>

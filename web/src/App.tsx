@@ -8,6 +8,7 @@ import { AuditPanel } from "./AuditPanel.js";
 import { RequestCrawl } from "./RequestCrawl.js";
 import { SyncFooter } from "./SyncFooter.js";
 import { InvitesPanel } from "./InvitesPanel.js";
+import { StatsPanel } from "./StatsPanel.js";
 import { Enroll } from "./Enroll.js";
 
 export function App() {
@@ -16,6 +17,8 @@ export function App() {
   const [pdsHostname, setPdsHostname] = useState("");
   const [passwordLogin, setPasswordLogin] = useState(true);
   const [lastFullSync, setLastFullSync] = useState<string | null>(null);
+  // object wrapper so clicking the same handle twice still retriggers the search
+  const [accountSearch, setAccountSearch] = useState<{ q: string } | null>(null);
   const [enrollToken] = useState(
     () => new URLSearchParams(window.location.search).get("enroll"),
   );
@@ -68,7 +71,8 @@ export function App() {
         </div>
       </header>
       <StatusPanel onLastSync={setLastFullSync} />
-      <AccountsPanel appviewUrl={appviewUrl} />
+      <AccountsPanel appviewUrl={appviewUrl} searchFor={accountSearch} />
+      <StatsPanel onSearchAccount={(handle) => setAccountSearch({ q: handle })} />
       <InvitesPanel />
       <PasskeysPanel />
       <AuditPanel />

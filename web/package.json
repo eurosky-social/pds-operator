@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/atkinson-hyperlegible-mono": "^5.2.10",
     "@simplewebauthn/browser": "^13.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

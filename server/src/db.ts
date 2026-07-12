@@ -47,6 +47,17 @@ export function openDb(file?: string) {
     );
     CREATE INDEX IF NOT EXISTS labels_did ON labels(did);
 
+    -- per-account commit counts from the firehose, bucketed by UTC hour ("YYYY-MM-DDTHH")
+    -- so the stats API can regroup them into days in the viewer's timezone. Unlike the
+    -- rest of this file, activity is NOT rebuildable from the PDS — counting starts when
+    -- the server first runs and history is lost if the file is deleted.
+    CREATE TABLE IF NOT EXISTS activity (
+      hour TEXT NOT NULL,
+      did TEXT NOT NULL,
+      events INTEGER NOT NULL,
+      PRIMARY KEY (hour, did)
+    );
+
     CREATE TABLE IF NOT EXISTS sync_state (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -66,6 +77,25 @@ export function openDb(file?: string) {
       expires_at INTEGER NOT NULL
     );
   `);
+
+  // activity was briefly bucketed by whole day; re-home those rows at UTC midnight
+  const legacyDayColumn = db
+    .prepare("SELECT COUNT(*) AS n FROM pragma_table_info('activity') WHERE name = 'day'")
+    .get() as { n: number };
+  if (legacyDayColumn.n > 0) {
+    db.exec(`
+      ALTER TABLE activity RENAME TO activity_legacy;
+      CREATE TABLE activity (
+        hour TEXT NOT NULL,
+        did TEXT NOT NULL,
+        events INTEGER NOT NULL,
+        PRIMARY KEY (hour, did)
+      );
+      INSERT INTO activity (hour, did, events)
+        SELECT day || 'T00', did, events FROM activity_legacy;
+      DROP TABLE activity_legacy;
+    `);
+  }
   return db;
 }
 

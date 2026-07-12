@@ -25,7 +25,7 @@ export function AuditPanel() {
 
   return (
     <div className="panel">
-      <h2>audit log</h2>
+      <h2>Audit Log</h2>
       {error && <div className="error-text">{error}</div>}
       {entries.length === 0 && !error && (
         <p className="mono-dim empty-state">no actions recorded yet</p>
@@ -34,10 +34,10 @@ export function AuditPanel() {
         <table className="audit-table">
           <thead>
             <tr>
-              <th>when</th>
-              <th>action</th>
-              <th>target</th>
-              <th>operator</th>
+              <th>When</th>
+              <th>Action</th>
+              <th>Target</th>
+              <th>Operator</th>
             </tr>
           </thead>
           <tbody>

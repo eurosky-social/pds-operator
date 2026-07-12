@@ -33,6 +33,27 @@ export interface CursorStatus {
   lastFullSync: string | null;
 }
 
+export interface Stats {
+  accounts: {
+    total: number;
+    active: number;
+    takendown: number;
+    deactivated: number;
+    flagged: number;
+  };
+  activity: {
+    active: number;
+    dormant: number;
+    avgDailyActive: number;
+    newAccounts: number;
+    writes: number;
+    writesByDay: { day: string; n: number }[];
+    topAccounts: { did: string; handle: string; avatar: string | null; n: number }[];
+  };
+  signups: { month: string; n: number }[];
+  labels: { name: string; n: number }[];
+}
+
 export const api = {
   session: () =>
     req<{
@@ -83,6 +104,12 @@ export const api = {
     req<{ code: string }>("/api/invites", { method: "POST", body: JSON.stringify({ useCount }) }),
   inviteDisable: (code: string) =>
     req<{ ok: true }>("/api/invites/disable", { method: "POST", body: JSON.stringify({ code }) }),
+  stats: (days = 30, months = 12, activeDays = 30) =>
+    req<Stats>(
+      `/api/stats?days=${days}&months=${months}&activeDays=${activeDays}&tz=${encodeURIComponent(
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+      )}`,
+    ),
   audit: () =>
     req<{ entries: { at: string; operator: string; action: string; target?: string }[] }>(
       "/api/audit?limit=500",

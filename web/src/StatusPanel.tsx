@@ -52,24 +52,24 @@ export function StatusPanel({
         </div>
       )}
       <div className="status-grid">
-        <div className="stat">
-          <span className="label">relay seq</span>
+        <div className="stat kv">
+          <span className="label">Relay Seq</span>
           {status ? (
             <span className="value">{status.relaySeq.toLocaleString()}</span>
           ) : (
             placeholder
           )}
         </div>
-        <div className="stat">
-          <span className="label">pds head</span>
+        <div className="stat kv">
+          <span className="label">PDS Head</span>
           {status ? (
             <span className="value">{status.pdsHeadSeqApprox?.toLocaleString() ?? "—"}</span>
           ) : (
             placeholder
           )}
         </div>
-        <div className="stat">
-          <span className="label">gap</span>
+        <div className="stat kv">
+          <span className="label">Gap</span>
           {status ? (
             <span className={`value ${gapClass}`}>
               {gap != null ? gap.toLocaleString() : "unknown"}
@@ -78,12 +78,12 @@ export function StatusPanel({
             placeholder
           )}
         </div>
-        <div className="stat">
-          <span className="label">relay status</span>
+        <div className="stat kv">
+          <span className="label">Relay Status</span>
           {status ? <span className={`value ${statusClass}`}>{status.relayStatus}</span> : placeholder}
         </div>
-        <div className="stat">
-          <span className="label">accounts</span>
+        <div className="stat kv">
+          <span className="label">Relay Accounts</span>
           {status ? <span className="value">{status.accountCount.toLocaleString()}</span> : placeholder}
         </div>
       </div>

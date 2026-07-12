@@ -14,6 +14,29 @@ export interface WatchedLabeler {
   watch: Set<string>;
 }
 
+/** SQL predicate for "this account carries a watched label", for queries over `accounts`. */
+export function watchedLabelPredicate(labelers: WatchedLabeler[]): {
+  expr: string;
+  params: unknown[];
+} {
+  const conds: string[] = [];
+  const params: unknown[] = [];
+  for (const l of labelers) {
+    if (l.watch.size === 0) {
+      conds.push("l.src = ?");
+      params.push(l.did);
+    } else {
+      conds.push(`(l.src = ? AND l.val IN (${[...l.watch].map(() => "?").join(",")}))`);
+      params.push(l.did, ...l.watch);
+    }
+  }
+  const expr =
+    conds.length > 0
+      ? `EXISTS (SELECT 1 FROM labels l WHERE l.did = accounts.did AND (${conds.join(" OR ")}))`
+      : "0";
+  return { expr, params };
+}
+
 export class LabelerClient {
   private endpoint: string | null = null;
 

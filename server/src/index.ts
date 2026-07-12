@@ -19,6 +19,7 @@ import { registerStatusRoutes } from "./routes/status.js";
 import { registerPasskeyRoutes } from "./routes/passkeys.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerInviteRoutes } from "./routes/invites.js";
+import { registerStatsRoutes } from "./routes/stats.js";
 import { BskyDmNotifier } from "./notifier.js";
 
 const {
@@ -140,11 +141,12 @@ if (!OPERATOR_PASSWORD_HASH) {
 }
 
 registerAuthRoutes(app, OPERATOR_PASSWORD_HASH ?? null, appviewUrl, PDS_HOSTNAME!);
-registerAccountRoutes(app, pds, db, labelers, labelNames);
+registerAccountRoutes(app, pds, db, labelers);
 registerStatusRoutes(app, pds, relay, PDS_HOSTNAME!, db);
 registerPasskeyRoutes(app, db, PDS_HOSTNAME!);
 registerAuditRoutes(app);
 registerInviteRoutes(app, pds);
+registerStatsRoutes(app, db, labelers);
 
 const webDist = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 await app.register(fastifyStatic, { root: webDist });

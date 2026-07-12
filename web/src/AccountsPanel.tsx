@@ -1,10 +1,17 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api, type Account } from "./api.js";
 import { useToast } from "./useToast.js";
 
 const PAGE_SIZES = [25, 50, 100, 250];
 
-export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
+export function AccountsPanel({
+  appviewUrl,
+  searchFor,
+}: {
+  appviewUrl: string;
+  // search request from another panel (e.g. clicking a handle in stats)
+  searchFor?: { q: string } | null;
+}) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [total, setTotal] = useState(0);
   const [flaggedTotal, setFlaggedTotal] = useState(0);
@@ -22,6 +29,13 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!searchFor) return;
+    setQuery(searchFor.q);
+    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [searchFor]);
   const [busyDid, setBusyDid] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ did: string; action: "status" | "reset" } | null>(null);
   const [menuDid, setMenuDid] = useState<string | null>(null);
@@ -121,10 +135,10 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
   const tableHead = (
     <thead>
       <tr>
-        <th>handle</th>
-        <th>did</th>
-        <th>status</th>
-        <th>indexed</th>
+        <th>Handle</th>
+        <th>DID</th>
+        <th>Status</th>
+        <th>Indexed</th>
         <th></th>
       </tr>
     </thead>
@@ -244,9 +258,9 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
 
   return (
     <>
-      <div className="panel">
+      <div className="panel" ref={panelRef}>
         <h2>
-          accounts ({total - flaggedTotal}
+          Accounts ({total - flaggedTotal}
           {query.trim() ? " matching" : ""}
           {flaggedTotal > 0 ? ` + ${flaggedTotal} flagged` : ""})
         </h2>
@@ -254,7 +268,7 @@ export function AccountsPanel({ appviewUrl }: { appviewUrl: string }) {
           <span className="search-wrap">
             <input
               type="search"
-              placeholder="search handle, email, or did…"
+              placeholder="search handle, email, did, or label…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

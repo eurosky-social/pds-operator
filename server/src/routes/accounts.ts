@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { PdsClient } from "../pdsClient.js";
-import type { WatchedLabeler } from "../labelerClient.js";
+import { watchedLabelPredicate, type WatchedLabeler } from "../labelerClient.js";
 import type { AccountRow, Db, LabelRow } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { recordAction } from "../auditLog.js";
@@ -20,7 +20,6 @@ export function registerAccountRoutes(
   pds: PdsClient,
   db: Db,
   labelers: WatchedLabeler[],
-  labelNames: Map<string, Map<string, string>>,
 ) {
   const watchBysrc = new Map(labelers.map((l) => [l.did, l.watch]));
 
@@ -29,8 +28,6 @@ export function registerAccountRoutes(
     if (!watch) return false;
     return watch.size === 0 || watch.has(row.val);
   }
-
-  const displayName = (src: string, val: string) => labelNames.get(src)?.get(val) ?? val;
 
   function toApi(rows: AccountRow[]): ApiAccount[] {
     if (rows.length === 0) return [];
@@ -42,7 +39,7 @@ export function registerAccountRoutes(
     for (const row of labelRows) {
       if (!isWatched(row)) continue;
       const set = labelsByDid.get(row.did) ?? new Set<string>();
-      set.add(displayName(row.src, row.val));
+      set.add(row.val);
       labelsByDid.set(row.did, set);
     }
     return rows.map((r) => ({
@@ -56,23 +53,8 @@ export function registerAccountRoutes(
     }));
   }
 
-  // SQL predicate for "this account carries a watched label" — used to float flagged
-  // accounts to the top of the list
-  const flagConds: string[] = [];
-  const flagParams: unknown[] = [];
-  for (const l of labelers) {
-    if (l.watch.size === 0) {
-      flagConds.push("l.src = ?");
-      flagParams.push(l.did);
-    } else {
-      flagConds.push(`(l.src = ? AND l.val IN (${[...l.watch].map(() => "?").join(",")}))`);
-      flagParams.push(l.did, ...l.watch);
-    }
-  }
-  const flagExpr =
-    flagConds.length > 0
-      ? `EXISTS (SELECT 1 FROM labels l WHERE l.did = accounts.did AND (${flagConds.join(" OR ")}))`
-      : "0";
+  // "this account carries a watched label" — used to float flagged accounts to the top
+  const { expr: flagExpr, params: flagParams } = watchedLabelPredicate(labelers);
 
   app.get("/api/accounts", { preHandler: requireAuth }, async (req) => {
     const query = req.query as {
@@ -90,17 +72,19 @@ export function registerAccountRoutes(
     if (q) {
       const pattern = "%" + q.replace(/[\\%_]/g, (m) => "\\" + m) + "%";
       where.push(
-        "(handle LIKE ? ESCAPE '\\' OR did LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\')",
+        `(handle LIKE ? ESCAPE '\\' OR did LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\'
+          OR EXISTS (SELECT 1 FROM labels l WHERE l.did = accounts.did AND l.val LIKE ? ESCAPE '\\'))`,
       );
-      params.push(pattern, pattern, pattern);
+      params.push(pattern, pattern, pattern, pattern);
     }
     if (query.hideTakendown === "1") {
       if (q) {
-        // an exact handle/did/email match should surface even when taken down
+        // an exact handle/did/email/label match should surface even when taken down
         where.push(
-          "(status != 'takendown' OR handle = ? COLLATE NOCASE OR did = ? OR email = ? COLLATE NOCASE)",
+          `(status != 'takendown' OR handle = ? COLLATE NOCASE OR did = ? OR email = ? COLLATE NOCASE
+            OR EXISTS (SELECT 1 FROM labels l WHERE l.did = accounts.did AND l.val = ? COLLATE NOCASE))`,
         );
-        params.push(q, q, q);
+        params.push(q, q, q, q);
       } else {
         where.push("status != 'takendown'");
       }

@@ -55,7 +55,7 @@ export function PasskeysPanel() {
 
   return (
     <div className="panel">
-      <h2>passkeys</h2>
+      <h2>Passkeys</h2>
       {error && <div className="error-text">{error}</div>}
       {passkeys.length === 0 && (
         <p className="mono-dim empty-state">no passkeys yet. password sign-in only.</p>
