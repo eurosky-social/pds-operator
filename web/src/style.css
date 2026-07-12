@@ -323,6 +323,7 @@ button.danger:hover:not(:disabled) {
 
 .chart-months span {
   flex: 1;
+  min-width: 0; /* shrinkable, so a dozen labels never widen the page */
   text-align: center;
   font-size: 14px;
   color: var(--text-dim);
@@ -392,7 +393,7 @@ button.inline-count:hover {
 
 @media (max-width: 640px) {
   .charts-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr); /* min-content of labels must not widen the page */
   }
 }
 
