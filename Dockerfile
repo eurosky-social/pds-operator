@@ -24,5 +24,6 @@ COPY --from=server /app/server/dist ./dist
 COPY --from=server /app/server/package.json ./package.json
 COPY --from=server /app/server/labelers.json ./labelers.json
 COPY --from=web /app/web/dist /app/web/dist
+RUN mkdir /data && chown node:node /data
 EXPOSE 8787
 CMD ["node", "dist/index.js"]

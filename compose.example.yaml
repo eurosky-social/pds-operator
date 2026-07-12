@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      - HOST=0.0.0.0 # required for reverse proxy to reach
+      - DB_PATH=/data/data.sqlite
+      - AUDIT_LOG_PATH=/data/audit.log
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - app-data:/data
+      # or keep to data on a host path: on linux the dir must be writable by the
+      # container user (chown it to uid 1000, or change `user:` below to its owner)
+      # :Z is for selinux hosts (e.g. podman on fedora), harmless elsewhere:
+      # - ./data:/data:Z
+      # uncomment to change the labeler watchlist without a rebuild:
+      # - ./server/labelers.json:/app/server/labelers.json:ro,Z
+    # runs unprivileged; for the ./data bind mount above, change to the dir's
+    # owner with values from `id -u` and `id -g`:
+    user: node
+    # hardening: if something misbehaves, loosen read_only first, then cap_drop,
+    # then no-new-privileges, and re-enable whatever turns out innocent
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  app-data:

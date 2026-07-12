@@ -112,3 +112,25 @@ production.
 - Set `DASHBOARD_URL` to the real URL and `chmod 600 server/.env`.
 - Back up `server/audit.log` (`AUDIT_LOG_PATH` overrides the location).
 - Run under a process supervisor. Sessions are in-memory, so a restart signs you out.
+
+### Docker
+
+```
+cp .env.example .env                              # fill in per the comments
+cp compose.example.yaml compose.yaml
+docker compose up -d --build
+docker compose exec app node dist/cli.js enroll   # passkey enrollment link (see Setup)
+```
+
+- The dashboard listens on `127.0.0.1:8787`, reachable only from the host. In production, put a
+  TLS-terminating reverse proxy in front (HTTPS is required for passkeys). If the
+  proxy is another compose service, remove the `ports:` block and point it at
+  `app:8787`.
+- Data persists in the `app-data` volume across rebuilds and updates. To back up the
+  audit log, do: `docker compose cp app:/data/audit.log .`, or you can switch to a bind mount
+  (see comment in `compose.example.yaml`).
+- To watch your own labelers, edit `server/labelers.json` (copy the example) then
+  rebuild, or bind mount it (commented line in the compose file) so a restart is
+  enough.
+- Use the enroll command above, not `npm run enroll`. dev tooling isn't in the
+  image.
