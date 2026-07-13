@@ -1,0 +1,36 @@
+when:
+  - event: [ "manual" ]
+  - event: [ "push" ]
+    branch: [ "main" ]
+
+engine: nixery
+
+dependencies:
+  nixpkgs:
+    - kaniko
+
+environment:
+  DOCKER_CONFIG: "/kaniko/.docker"
+
+steps:
+  - name: Configure Kaniko
+    command: |
+      mkdir -p /kaniko/.docker/
+      echo "{
+        \"auths\": {
+          \"https://atcr.io/v1\":{
+            \"auth\": \"$ATCR_CREDENTIALS\"
+          }
+        }
+      }" > /kaniko/.docker/config.json
+
+  - name: Build image
+    command: |
+      executor \
+        --context=$(pwd) \
+        --ignore-path=$(pwd) \
+        --dockerfile=$(pwd)/Dockerfile \
+        --destination="atcr.io/brookie.blog/pds-operator:latest" \
+        --destination="atcr.io/brookie.blog/pds-operator:$TANGLED_COMMIT_SHA" \
+        --push-retry=3 \
+        --skip-push-permission-check
