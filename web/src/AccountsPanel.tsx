@@ -223,6 +223,15 @@ export function AccountsPanel({
                   >
                     visit profile
                   </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuDid(null);
+                      window.open(`https://pds.ls/at://${a.did}`, "_blank", "noopener");
+                    }}
+                  >
+                    open in pdsls
+                  </button>
                   <button role="menuitem" onClick={(e) => copy(a.handle, "username", e)}>
                     copy username
                   </button>
