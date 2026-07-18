@@ -19,6 +19,7 @@ RUN [ -f labelers.json ] || cp labelers.json.example labelers.json
 FROM node:22-slim
 ENV NODE_ENV=production
 WORKDIR /app/server
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init && rm -rf /var/lib/apt/lists/*
 COPY --from=server /app/server/node_modules ./node_modules
 COPY --from=server /app/server/dist ./dist
 COPY --from=server /app/server/package.json ./package.json
@@ -26,4 +27,5 @@ COPY --from=server /app/server/labelers.json ./labelers.json
 COPY --from=web /app/web/dist /app/web/dist
 RUN mkdir /data && chown node:node /data
 EXPOSE 8787
+ENTRYPOINT [ "dumb-init", "--" ]
 CMD ["node", "dist/index.js"]
