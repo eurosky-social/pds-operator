@@ -257,9 +257,13 @@ export class PdsClient {
         opened = true;
       });
       ws.on("message", (data: Buffer) => {
-        const frame = readFrame(data);
-        if (typeof frame.body?.seq === "number") {
-          maxSeq = maxSeq == null ? frame.body.seq : Math.max(maxSeq, frame.body.seq);
+        try {
+          const frame = readFrame(data);
+          if (typeof frame.body?.seq === "number") {
+            maxSeq = maxSeq == null ? frame.body.seq : Math.max(maxSeq, frame.body.seq);
+          }
+        } catch {
+          // ignore undecodable frames
         }
       });
 
