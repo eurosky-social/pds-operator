@@ -37,6 +37,8 @@ export interface AdminAccount {
 
 export class PdsClient {
   private accessJwt: string | null = null;
+  private refreshJwt: string | null = null;
+  private sessionPromise: Promise<void> | null = null;
 
   constructor(
     public readonly hostname: string,
@@ -50,8 +52,7 @@ export class PdsClient {
     private adminIdentifier?: string,
   ) {}
 
-  private async ensureSession(): Promise<string> {
-    if (this.accessJwt) return this.accessJwt;
+  private async createSession(): Promise<void> {
     const res = await fetch(`https://${this.hostname}/xrpc/com.atproto.server.createSession`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -61,28 +62,78 @@ export class PdsClient {
       const body = await res.text().catch(() => "");
       throw new Error(`PDS admin sign-in as ${this.adminIdentifier} failed: ${res.status} ${body}`);
     }
-    const { accessJwt } = (await res.json()) as { accessJwt: string };
+    const { accessJwt, refreshJwt } = (await res.json()) as {
+      accessJwt: string;
+      refreshJwt: string;
+    };
     this.accessJwt = accessJwt;
-    return accessJwt;
+    this.refreshJwt = refreshJwt;
   }
 
-  private async authHeader() {
-    if (this.adminIdentifier) return `Bearer ${await this.ensureSession()}`;
-    const token = Buffer.from(`admin:${this.adminPassword}`).toString("base64");
-    return `Basic ${token}`;
+  private async updateSession(update: () => Promise<void>): Promise<void> {
+    let promise = this.sessionPromise;
+    if (!promise) {
+      promise = update();
+      this.sessionPromise = promise;
+    }
+    try {
+      await promise;
+    } finally {
+      if (this.sessionPromise === promise) this.sessionPromise = null;
+    }
+  }
+
+  private async ensureSession(): Promise<string> {
+    if (!this.accessJwt) await this.updateSession(() => this.createSession());
+    return this.accessJwt!;
+  }
+
+  private async refreshSession(): Promise<boolean> {
+    if (!this.refreshJwt) return false;
+    const res = await fetch(`https://${this.hostname}/xrpc/com.atproto.server.refreshSession`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.refreshJwt}` },
+    });
+    if (res.status === 400 || res.status === 401) return false;
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`PDS admin session refresh failed: ${res.status} ${body}`);
+    }
+    const { accessJwt, refreshJwt } = (await res.json()) as {
+      accessJwt: string;
+      refreshJwt: string;
+    };
+    this.accessJwt = accessJwt;
+    this.refreshJwt = refreshJwt;
+    return true;
+  }
+
+  private async renewSession(expiredAccessJwt: string): Promise<void> {
+    if (this.accessJwt !== expiredAccessJwt) return;
+    await this.updateSession(async () => {
+      if (this.accessJwt !== expiredAccessJwt) return;
+      if (await this.refreshSession()) return;
+      this.accessJwt = null;
+      this.refreshJwt = null;
+      await this.createSession();
+    });
   }
 
   private async xrpc(path: string, opts: RequestInit = {}, retry = true): Promise<any> {
+    const accessJwt = this.adminIdentifier ? await this.ensureSession() : null;
+    const authorization = accessJwt
+      ? `Bearer ${accessJwt}`
+      : `Basic ${Buffer.from(`admin:${this.adminPassword}`).toString("base64")}`;
     const res = await fetch(`https://${this.hostname}/xrpc/${path}`, {
       ...opts,
       headers: {
         ...opts.headers,
-        Authorization: await this.authHeader(),
+        Authorization: authorization,
         "Content-Type": "application/json",
       },
     });
     if (res.status === 401 && this.adminIdentifier && retry) {
-      this.accessJwt = null; // token expired — re-auth once
+      await this.renewSession(accessJwt!);
       return this.xrpc(path, opts, false);
     }
     if (!res.ok) {

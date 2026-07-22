@@ -44,7 +44,8 @@ async function resolvePdsEndpoint(did: string): Promise<string> {
 }
 
 export class BskyDmNotifier {
-  private session: { pds: string; accessJwt: string } | null = null;
+  private session: { pds: string; accessJwt: string; refreshJwt: string } | null = null;
+  private sessionPromise: Promise<void> | null = null;
   private recipientDid: string | null = null;
   private convoId: string | null = null;
 
@@ -54,8 +55,7 @@ export class BskyDmNotifier {
   ) {}
 
   /** Resolve the sender's DID + PDS from their handle, then create a session there. */
-  private async ensureSession(): Promise<{ pds: string; accessJwt: string }> {
-    if (this.session) return this.session;
+  private async createSession(): Promise<void> {
     const did = await resolveHandleToDid(this.cfg.handle);
     const pds = await resolvePdsEndpoint(did);
     const res = await fetch(`${pds}/xrpc/com.atproto.server.createSession`, {
@@ -67,9 +67,61 @@ export class BskyDmNotifier {
       const body = await res.text().catch(() => "");
       throw new Error(`createSession for ${this.cfg.handle} failed: ${res.status} ${body}`);
     }
-    const { accessJwt } = (await res.json()) as { accessJwt: string };
-    this.session = { pds, accessJwt };
-    return this.session;
+    const { accessJwt, refreshJwt } = (await res.json()) as {
+      accessJwt: string;
+      refreshJwt: string;
+    };
+    this.session = { pds, accessJwt, refreshJwt };
+  }
+
+  private async updateSession(update: () => Promise<void>): Promise<void> {
+    let promise = this.sessionPromise;
+    if (!promise) {
+      promise = update();
+      this.sessionPromise = promise;
+    }
+    try {
+      await promise;
+    } finally {
+      if (this.sessionPromise === promise) this.sessionPromise = null;
+    }
+  }
+
+  private async ensureSession(): Promise<{ pds: string; accessJwt: string; refreshJwt: string }> {
+    if (!this.session) await this.updateSession(() => this.createSession());
+    return this.session!;
+  }
+
+  private async refreshSession(session: {
+    pds: string;
+    accessJwt: string;
+    refreshJwt: string;
+  }): Promise<boolean> {
+    const res = await fetch(`${session.pds}/xrpc/com.atproto.server.refreshSession`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.refreshJwt}` },
+    });
+    if (res.status === 400 || res.status === 401) return false;
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`refreshSession for ${this.cfg.handle} failed: ${res.status} ${body}`);
+    }
+    const { accessJwt, refreshJwt } = (await res.json()) as {
+      accessJwt: string;
+      refreshJwt: string;
+    };
+    this.session = { pds: session.pds, accessJwt, refreshJwt };
+    return true;
+  }
+
+  private async renewSession(expiredAccessJwt: string): Promise<void> {
+    if (this.session?.accessJwt !== expiredAccessJwt) return;
+    await this.updateSession(async () => {
+      if (this.session?.accessJwt !== expiredAccessJwt) return;
+      if (await this.refreshSession(this.session)) return;
+      this.session = null;
+      await this.createSession();
+    });
   }
 
   /** Chat XRPC via the sender's PDS, service-proxied to the Bluesky chat appview. */
@@ -85,7 +137,7 @@ export class BskyDmNotifier {
       },
     });
     if (res.status === 401 && retry) {
-      this.session = null; // token expired — re-auth once
+      await this.renewSession(accessJwt);
       return this.chatXrpc(path, opts, false);
     }
     if (!res.ok) {
