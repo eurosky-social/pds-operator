@@ -77,6 +77,15 @@ function attachHeartbeat(ws: WebSocket, intervalMs = 30_000) {
   ws.once("close", () => clearInterval(timer));
 }
 
+const ACCOUNT_STREAM_CURSOR_KEY = "account_stream_cursor";
+
+export function accountStreamUrl(hostname: string, cursor: string | null): string {
+  return (
+    `wss://${hostname}/xrpc/com.atproto.sync.subscribeRepos` +
+    (cursor ? `?cursor=${cursor}` : "")
+  );
+}
+
 function repoStatusToAccountStatus(repo: RepoEntry): "active" | "takendown" | "deactivated" {
   if (repo.active !== false) return "active";
   return repo.status === "deactivated" ? "deactivated" : "takendown";
@@ -253,15 +262,17 @@ export class Syncer {
 
   private connectAccountStream() {
     if (this.stopped) return;
-    const ws = new WebSocket(
-      `wss://${this.pds.hostname}/xrpc/com.atproto.sync.subscribeRepos`,
-    );
+    const cursor = getSyncState(this.db, ACCOUNT_STREAM_CURSOR_KEY);
+    const ws = new WebSocket(accountStreamUrl(this.pds.hostname, cursor));
     this.sockets.push(ws);
     attachHeartbeat(ws);
 
     ws.on("message", (data: Buffer) => {
       try {
         const { header, body } = readFrame(data);
+        if (typeof body?.seq === "number") {
+          setSyncState(this.db, ACCOUNT_STREAM_CURSOR_KEY, String(body.seq));
+        }
         const did: string | undefined = body?.did ?? body?.repo;
         if (!did) return;
         // #account carries active/status directly; #identity means handle changed;
