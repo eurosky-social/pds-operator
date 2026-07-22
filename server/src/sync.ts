@@ -294,6 +294,16 @@ export class Syncer {
     const dids = [...this.dirty];
     this.dirty.clear();
 
+    try {
+      await this.refreshAccounts(dids);
+    } catch (err) {
+      // re-queue so the next flush retries; adds, not replaces, so DIDs dirtied mid-flight stay dirty
+      for (const did of dids) this.dirty.add(did);
+      throw err;
+    }
+  }
+
+  private async refreshAccounts(dids: string[]) {
     const [infos, avatarByDid, statuses] = await Promise.all([
       mapLimit(chunks(dids, 100), FETCH_CONCURRENCY, (b) => this.pds.accountInfos(b)).then((r) =>
         r.flat(),
