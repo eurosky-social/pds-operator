@@ -26,6 +26,13 @@ export async function readRecent(limit = 50): Promise<AuditEntry[]> {
     .split("\n")
     .filter(Boolean)
     .slice(-limit)
-    .map((line) => JSON.parse(line) as AuditEntry)
+    .map((line) => {
+      try {
+        return JSON.parse(line) as AuditEntry;
+      } catch {
+        return null; // torn line from a crash mid-append — skip, don't 500
+      }
+    })
+    .filter((e): e is AuditEntry => e !== null)
     .reverse();
 }
