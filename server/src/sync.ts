@@ -97,6 +97,8 @@ export class Syncer {
   private activity = new Map<string, number>();
   private sockets: WebSocket[] = [];
   private stopped = false;
+  private syncing = false;
+  private timers: NodeJS.Timeout[] = [];
 
   constructor(
     private db: Db,
@@ -122,25 +124,46 @@ export class Syncer {
 
   start() {
     void this.fullSync().catch((err) => this.log.error({ err }, "initial full sync failed"));
-    setInterval(() => {
+    const syncTimer = setInterval(() => {
       void this.fullSync().catch((err) => this.log.error({ err }, "full sync failed"));
-    }, FULL_SYNC_INTERVAL_MS).unref();
-    setInterval(() => {
+    }, FULL_SYNC_INTERVAL_MS);
+    const flushTimer = setInterval(() => {
       void this.flushDirty().catch((err) => this.log.error({ err }, "dirty flush failed"));
       try {
         this.flushActivity();
       } catch (err) {
         this.log.error({ err }, "activity flush failed");
       }
-    }, DIRTY_FLUSH_MS).unref();
+    }, DIRTY_FLUSH_MS);
+    for (const t of [syncTimer, flushTimer]) t.unref();
+    this.timers.push(syncTimer, flushTimer);
 
     this.connectAccountStream();
     for (const labeler of this.labelers) this.connectLabelStream(labeler);
   }
 
+  /** Shutdown seam: stop reconnects, tear down sockets, cancel timers. */
+  stop() {
+    this.stopped = true;
+    for (const t of this.timers) clearInterval(t);
+    this.timers = [];
+    for (const ws of this.sockets) ws.terminate();
+    this.sockets = [];
+  }
+
   // ---- full reconcile ------------------------------------------------------
 
   async fullSync() {
+    if (this.syncing) return; // a slow sync must not overlap the next tick
+    this.syncing = true;
+    try {
+      await this.fullSyncInner();
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  private async fullSyncInner() {
     const started = Date.now();
     const repos = await this.pds.listAllRepos();
     const dids = repos.map((r) => r.did);
@@ -290,6 +313,7 @@ export class Syncer {
       }
     });
     const reconnect = () => {
+      this.sockets = this.sockets.filter((s) => s !== ws);
       if (this.stopped) return;
       setTimeout(() => this.connectAccountStream(), RECONNECT_MS).unref();
     };
@@ -408,6 +432,7 @@ export class Syncer {
           }
         });
         const reconnect = () => {
+          this.sockets = this.sockets.filter((s) => s !== ws);
           if (this.stopped) return;
           setTimeout(() => this.connectLabelStream(labeler), RECONNECT_MS).unref();
         };

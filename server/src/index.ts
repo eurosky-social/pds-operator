@@ -128,6 +128,13 @@ const db = openDb();
 const syncer = new Syncer(db, pds, labelers, app.log, notifier, labelNames);
 syncer.start();
 
+for (const sig of ["SIGTERM", "SIGINT"] as const) {
+  process.once(sig, () => {
+    syncer.stop();
+    void app.close().finally(() => process.exit(0));
+  });
+}
+
 const appviewUrl = (process.env.APPVIEW_URL ?? "https://bsky.app").replace(/\/$/, "");
 
 // no password hash = passkey-only; the first passkey comes from `npm run enroll`
