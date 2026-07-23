@@ -48,6 +48,15 @@ test("fullSync is single-flight", async () => {
   assert.equal(calls, 1);
 });
 
+test("account cursor persists on flush, not per frame", () => {
+  const db = openDb(":memory:");
+  const syncer = new Syncer(db, { hostname: "pds.test" } as unknown as PdsClient, [], stubLogger);
+  (syncer as any).accountCursor = 99;
+  assert.equal(getSyncState(db, "account_stream_cursor"), null);
+  (syncer as any).flushCursor();
+  assert.equal(getSyncState(db, "account_stream_cursor"), "99");
+});
+
 test("account stream url resumes from the persisted cursor", () => {
   const db = openDb(":memory:");
   assert.equal(
