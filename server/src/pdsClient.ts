@@ -88,24 +88,25 @@ export class PdsClient {
     return this.accessJwt!;
   }
 
+  /** Any failure falls back to a fresh sign-in — never leave an expired session cached. */
   private async refreshSession(): Promise<boolean> {
     if (!this.refreshJwt) return false;
-    const res = await fetch(`https://${this.hostname}/xrpc/com.atproto.server.refreshSession`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.refreshJwt}` },
-    });
-    if (res.status === 400 || res.status === 401) return false;
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`PDS admin session refresh failed: ${res.status} ${body}`);
+    try {
+      const res = await fetch(`https://${this.hostname}/xrpc/com.atproto.server.refreshSession`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.refreshJwt}` },
+      });
+      if (!res.ok) return false;
+      const { accessJwt, refreshJwt } = (await res.json()) as {
+        accessJwt: string;
+        refreshJwt: string;
+      };
+      this.accessJwt = accessJwt;
+      this.refreshJwt = refreshJwt;
+      return true;
+    } catch {
+      return false;
     }
-    const { accessJwt, refreshJwt } = (await res.json()) as {
-      accessJwt: string;
-      refreshJwt: string;
-    };
-    this.accessJwt = accessJwt;
-    this.refreshJwt = refreshJwt;
-    return true;
   }
 
   private async renewSession(expiredAccessJwt: string): Promise<void> {
@@ -132,12 +133,14 @@ export class PdsClient {
         "Content-Type": "application/json",
       },
     });
-    if (res.status === 401 && this.adminIdentifier && retry) {
-      await this.renewSession(accessJwt!);
-      return this.xrpc(path, opts, false);
-    }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      // expired access tokens are 401 on the reference PDS but 400 ExpiredToken on tranquil-pds
+      const expired = res.status === 401 || (res.status === 400 && body.includes("ExpiredToken"));
+      if (expired && this.adminIdentifier && retry) {
+        await this.renewSession(accessJwt!);
+        return this.xrpc(path, opts, false);
+      }
       throw new Error(`PDS ${path} failed: ${res.status} ${body}`);
     }
     // some procedures (e.g. disableInviteCodes) return 200 with an empty body

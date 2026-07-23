@@ -92,26 +92,27 @@ export class BskyDmNotifier {
     return this.session!;
   }
 
+  /** Any failure falls back to a fresh sign-in — never leave an expired session cached. */
   private async refreshSession(session: {
     pds: string;
     accessJwt: string;
     refreshJwt: string;
   }): Promise<boolean> {
-    const res = await fetch(`${session.pds}/xrpc/com.atproto.server.refreshSession`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.refreshJwt}` },
-    });
-    if (res.status === 400 || res.status === 401) return false;
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`refreshSession for ${this.cfg.handle} failed: ${res.status} ${body}`);
+    try {
+      const res = await fetch(`${session.pds}/xrpc/com.atproto.server.refreshSession`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.refreshJwt}` },
+      });
+      if (!res.ok) return false;
+      const { accessJwt, refreshJwt } = (await res.json()) as {
+        accessJwt: string;
+        refreshJwt: string;
+      };
+      this.session = { pds: session.pds, accessJwt, refreshJwt };
+      return true;
+    } catch {
+      return false;
     }
-    const { accessJwt, refreshJwt } = (await res.json()) as {
-      accessJwt: string;
-      refreshJwt: string;
-    };
-    this.session = { pds: session.pds, accessJwt, refreshJwt };
-    return true;
   }
 
   private async renewSession(expiredAccessJwt: string): Promise<void> {
@@ -136,12 +137,14 @@ export class BskyDmNotifier {
         "Content-Type": "application/json",
       },
     });
-    if (res.status === 401 && retry) {
-      await this.renewSession(accessJwt);
-      return this.chatXrpc(path, opts, false);
-    }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      // expired access tokens are 401 on the reference PDS but 400 ExpiredToken on tranquil-pds
+      const expired = res.status === 401 || (res.status === 400 && body.includes("ExpiredToken"));
+      if (expired && retry) {
+        await this.renewSession(accessJwt);
+        return this.chatXrpc(path, opts, false);
+      }
       throw new Error(`chat ${path} failed: ${res.status} ${body}`);
     }
     return res.json();
