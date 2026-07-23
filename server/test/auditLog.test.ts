@@ -16,7 +16,7 @@ test("readRecent skips a torn trailing line", async () => {
   );
   // the module resolves AUDIT_LOG_PATH at import time
   process.env.AUDIT_LOG_PATH = logPath;
-  const { readRecent } = await import("./auditLog.js");
+  const { readRecent } = await import("../src/auditLog.js");
 
   const entries = await readRecent();
   assert.equal(entries.length, 2);

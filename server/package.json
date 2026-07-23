@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/*.test.ts",
+    "test": "tsx --test test/*.test.ts",
     "start": "node dist/index.js",
     "setup": "tsx src/cli.ts setup",
     "enroll": "tsx src/cli.ts enroll"

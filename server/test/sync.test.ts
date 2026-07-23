@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { FastifyBaseLogger } from "fastify";
-import { Syncer, accountStreamUrl } from "./sync.js";
-import { openDb, setSyncState, getSyncState } from "./db.js";
-import type { PdsClient } from "./pdsClient.js";
+import { Syncer, accountStreamUrl } from "../src/sync.js";
+import { openDb, setSyncState, getSyncState } from "../src/db.js";
+import type { PdsClient } from "../src/pdsClient.js";
 
 const stubLogger = { info() {}, warn() {}, error() {} } as unknown as FastifyBaseLogger;
 
