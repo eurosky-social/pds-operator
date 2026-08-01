@@ -209,6 +209,45 @@ button.danger:hover:not(:disabled) {
   margin-top: 12px;
 }
 
+/* request crawl is a split button: main action + chevron sharing one outline.
+   .menu-wrap sets inline-block later in the file, so match its specificity */
+.menu-wrap.crawl-split {
+  display: inline-flex;
+}
+
+.crawl-split > button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.crawl-split > button.chevron {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 0;
+  width: 35px; /* button height: 21px line + 12px padding + 2px border */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crawl-split .menu .relay-form {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+}
+
+.crawl-split .menu .relay-form input {
+  width: 170px;
+  min-width: 0;
+  padding: 4px 8px;
+}
+
+.crawl-split .menu .relay-form button {
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
 .stat {
   display: flex;
   flex-direction: column;
@@ -796,8 +835,13 @@ button.kebab {
     font-size: 14px;
   }
 
-  .crawl-row button {
+  .crawl-row .crawl-split {
+    display: flex;
     width: 100%;
+  }
+
+  .crawl-row .crawl-split > button:first-child {
+    flex: 1;
   }
 
   .accounts-toolbar {
