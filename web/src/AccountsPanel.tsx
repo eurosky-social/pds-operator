@@ -194,14 +194,14 @@ export function AccountsPanel({
           ) : (
             <span className="avatar" aria-hidden="true" />
           )}
-          <a
+          <button
+            type="button"
             className="handle-link"
-            href={`${appviewUrl}/profile/${a.did}`}
-            target="_blank"
-            rel="noopener noreferrer"
+            title={`stats for ${a.handle}`}
+            onClick={() => setStatsDid(a.did)}
           >
             {a.handle}
-          </a>
+          </button>
         </span>
         {(a.labels?.length ?? 0) > 0 && <div className="labels">{a.labels!.join(", ")}</div>}
       </td>

@@ -523,6 +523,16 @@ tr:hover td {
   text-decoration: underline;
 }
 
+/* handle buttons (open the stats modal) look like the handle links */
+button.handle-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
 .labels {
   color: var(--error);
   font-size: 14px;
