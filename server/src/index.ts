@@ -125,8 +125,21 @@ for (const l of labelers) {
     .catch((err) => app.log.warn({ err, labeler: l.did }, "label names fetch failed"));
 }
 
+// DM when one account creates this many records within the window; 0 disables.
+// Needs the notifier (NOTIFY_* vars) to have somewhere to send the alert.
+const alertCreates = Number(process.env.ACTIVITY_ALERT_CREATES ?? 500);
+const alertWindowMinutes = Number(process.env.ACTIVITY_ALERT_WINDOW_MINUTES ?? 60);
+const activityAlert =
+  notifier && Number.isFinite(alertCreates) && alertCreates > 0 &&
+  Number.isFinite(alertWindowMinutes) && alertWindowMinutes > 0
+    ? { creates: alertCreates, windowMinutes: alertWindowMinutes }
+    : null;
+if (notifier && !activityAlert) {
+  app.log.info("record creation burst alerts disabled (ACTIVITY_ALERT_CREATES=0)");
+}
+
 const db = openDb();
-const syncer = new Syncer(db, pds, labelers, app.log, notifier, labelNames);
+const syncer = new Syncer(db, pds, labelers, app.log, notifier, labelNames, activityAlert);
 syncer.start();
 
 for (const sig of ["SIGTERM", "SIGINT"] as const) {

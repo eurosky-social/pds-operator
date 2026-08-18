@@ -79,6 +79,12 @@ function attachHeartbeat(ws: WebSocket, intervalMs = 30_000) {
 
 const ACCOUNT_STREAM_CURSOR_KEY = "account_stream_cursor";
 
+/** DM an alert when one account makes this many record creations within the window. */
+export interface ActivityAlertConfig {
+  creates: number;
+  windowMinutes: number;
+}
+
 export function accountStreamUrl(hostname: string, cursor: string | null): string {
   return (
     `wss://${hostname}/xrpc/com.atproto.sync.subscribeRepos` +
@@ -101,6 +107,9 @@ export class Syncer {
   private timers: NodeJS.Timeout[] = [];
   // latest firehose seq, persisted on the flush tick — a write per frame would hammer SQLite
   private accountCursor: number | null = null;
+  // record creations per account, bucketed by minute, for burst alerts
+  private createBursts = new Map<string, Map<number, number>>();
+  private burstAlertedAt = new Map<string, number>();
 
   constructor(
     private db: Db,
@@ -109,6 +118,7 @@ export class Syncer {
     private log: FastifyBaseLogger,
     private notifier: BskyDmNotifier | null = null,
     private labelNames: Map<string, Map<string, string>> = new Map(),
+    private activityAlert: ActivityAlertConfig | null = null,
   ) {}
 
   private isWatched(labeler: WatchedLabeler, val: string): boolean {
@@ -134,6 +144,7 @@ export class Syncer {
       try {
         this.flushActivity();
         this.flushCursor();
+        this.pruneCreateBursts();
       } catch (err) {
         this.log.error({ err }, "activity flush failed");
       }
@@ -331,6 +342,12 @@ export class Syncer {
           const at = Number.isNaN(eventTime.getTime()) ? new Date() : eventTime;
           const key = `${at.toISOString().slice(0, 13)}|${did}`;
           this.activity.set(key, (this.activity.get(key) ?? 0) + 1);
+          if (this.activityAlert && this.notifier) {
+            const creates = Array.isArray(body.ops)
+              ? body.ops.filter((op: { action?: string }) => op?.action === "create").length
+              : 0;
+            if (creates > 0) this.trackCreateBurst(did, creates, at.getTime());
+          }
         }
       } catch {
         // ignore undecodable frames
@@ -430,6 +447,61 @@ export class Syncer {
     if (this.accountCursor == null) return;
     setSyncState(this.db, ACCOUNT_STREAM_CURSOR_KEY, String(this.accountCursor));
     this.accountCursor = null;
+  }
+
+  // ---- create-burst alerts -------------------------------------------------
+
+  /**
+   * Sliding window of record creations per account, bucketed by minute. Crossing the
+   * threshold DMs an alert, at most once per window per account. Buckets key on the
+   * event's own time and stale events are ignored outright, so cursor-replayed
+   * history after downtime can't fake a burst.
+   */
+  private trackCreateBurst(did: string, creates: number, eventMs: number) {
+    const alert = this.activityAlert!;
+    const windowMs = alert.windowMinutes * 60_000;
+    const now = Date.now();
+    if (eventMs <= now - windowMs) return;
+    const cutoff = Math.floor((now - windowMs) / 60_000);
+    let buckets = this.createBursts.get(did);
+    if (!buckets) {
+      buckets = new Map();
+      this.createBursts.set(did, buckets);
+    }
+    const minute = Math.floor(eventMs / 60_000);
+    buckets.set(minute, (buckets.get(minute) ?? 0) + creates);
+    let total = 0;
+    for (const [m, n] of buckets) {
+      if (m <= cutoff) buckets.delete(m);
+      else total += n;
+    }
+    if (total < alert.creates) return;
+    if (now - (this.burstAlertedAt.get(did) ?? 0) < windowMs) return;
+    this.burstAlertedAt.set(did, now);
+    const row = this.db.prepare("SELECT handle FROM accounts WHERE did = ?").get(did) as
+      | { handle: string }
+      | undefined;
+    this.log.warn({ did, creates: total }, "record creation burst");
+    void this.notifier?.notifyActivitySpike(
+      { did, handle: row?.handle ?? did },
+      total,
+      alert.windowMinutes,
+    );
+  }
+
+  /** Drop burst state that has aged out of the window, so idle accounts don't linger. */
+  private pruneCreateBursts() {
+    if (!this.activityAlert) return;
+    const windowMs = this.activityAlert.windowMinutes * 60_000;
+    const now = Date.now();
+    const cutoff = Math.floor((now - windowMs) / 60_000);
+    for (const [did, buckets] of this.createBursts) {
+      for (const m of buckets.keys()) if (m <= cutoff) buckets.delete(m);
+      if (buckets.size === 0) this.createBursts.delete(did);
+    }
+    for (const [did, at] of this.burstAlertedAt) {
+      if (now - at >= windowMs) this.burstAlertedAt.delete(did);
+    }
   }
 
   // ---- live label streams --------------------------------------------------

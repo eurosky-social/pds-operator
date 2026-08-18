@@ -86,6 +86,11 @@ password created **with** DM access, recipient handle, and the dashboard URL for
 links. The recipient has to accept DMs from the sender (follow them, or allow DMs from
 everyone). Unset = disabled.
 
+With DMs enabled you also get an alert when a single account creates a burst of records
+(likely spam). The default fires at 500 record creations in 60 minutes, tune with
+`ACTIVITY_ALERT_CREATES` and `ACTIVITY_ALERT_WINDOW_MINUTES`, disable with
+`ACTIVITY_ALERT_CREATES=0`. At most one alert per account per window.
+
 ## Dev
 
 ```

@@ -162,35 +162,61 @@ export class BskyDmNotifier {
     return this.convoId;
   }
 
+  /** Send "<prefix>@handle<suffix>" plus a dashboard deep link as a rich-text DM. */
+  private async sendAccountAlert(
+    account: { did: string; handle: string },
+    prefix: string,
+    suffix: string,
+  ): Promise<void> {
+    const convoId = await this.ensureConvo();
+
+    // rich text with byte-offset facets: mention the account, link to the dashboard
+    let text = "";
+    const facets: Facet[] = [];
+    const plain = (s: string) => {
+      text += s;
+    };
+    const faceted = (s: string, feature: Record<string, unknown>) => {
+      const byteStart = Buffer.byteLength(text);
+      text += s;
+      facets.push({ index: { byteStart, byteEnd: Buffer.byteLength(text) }, features: [feature] });
+    };
+
+    const link = `${this.cfg.dashboardUrl}/?q=${encodeURIComponent(account.handle)}`;
+    plain(prefix);
+    faceted(`@${account.handle}`, { $type: "app.bsky.richtext.facet#mention", did: account.did });
+    plain(`${suffix}\n`);
+    faceted(link, { $type: "app.bsky.richtext.facet#link", uri: link });
+
+    await this.chatXrpc("chat.bsky.convo.sendMessage", {
+      method: "POST",
+      body: JSON.stringify({ convoId, message: { text, facets } }),
+    });
+  }
+
   async notifyFlags(account: { did: string; handle: string }, labels: string[]): Promise<void> {
     try {
-      const convoId = await this.ensureConvo();
-
-      // rich text with byte-offset facets: mention the account, link to the dashboard
-      let text = "";
-      const facets: Facet[] = [];
-      const plain = (s: string) => {
-        text += s;
-      };
-      const faceted = (s: string, feature: Record<string, unknown>) => {
-        const byteStart = Buffer.byteLength(text);
-        text += s;
-        facets.push({ index: { byteStart, byteEnd: Buffer.byteLength(text) }, features: [feature] });
-      };
-
-      const link = `${this.cfg.dashboardUrl}/?q=${encodeURIComponent(account.handle)}`;
-      plain("⚠️ ");
-      faceted(`@${account.handle}`, { $type: "app.bsky.richtext.facet#mention", did: account.did });
-      plain(` flagged: ${labels.join(", ")}\n`);
-      faceted(link, { $type: "app.bsky.richtext.facet#link", uri: link });
-
-      await this.chatXrpc("chat.bsky.convo.sendMessage", {
-        method: "POST",
-        body: JSON.stringify({ convoId, message: { text, facets } }),
-      });
+      await this.sendAccountAlert(account, "⚠️ ", ` flagged: ${labels.join(", ")}`);
       this.log.info({ account: account.handle, labels }, "flag notification sent");
     } catch (err) {
       this.log.error({ err, account: account.handle }, "flag notification failed");
+    }
+  }
+
+  async notifyActivitySpike(
+    account: { did: string; handle: string },
+    creates: number,
+    windowMinutes: number,
+  ): Promise<void> {
+    try {
+      await this.sendAccountAlert(
+        account,
+        "🚨 ",
+        ` created ${creates.toLocaleString()} records in the last ${windowMinutes} minutes`,
+      );
+      this.log.info({ account: account.handle, creates }, "activity spike notification sent");
+    } catch (err) {
+      this.log.error({ err, account: account.handle }, "activity spike notification failed");
     }
   }
 }
