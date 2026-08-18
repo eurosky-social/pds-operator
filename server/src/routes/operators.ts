@@ -81,12 +81,19 @@ export function registerOperatorRoutes(
   // ---- admin management ----------------------------------------------------
 
   app.get("/api/operators", { preHandler: requireAuth }, async () => {
-    const rows = db.prepare("SELECT * FROM operators ORDER BY added_at").all() as OperatorRow[];
+    // avatar comes along for admins that are accounts on this PDS
+    const rows = db
+      .prepare(
+        `SELECT o.*, a.avatar FROM operators o
+         LEFT JOIN accounts a ON a.did = o.did ORDER BY o.added_at`,
+      )
+      .all() as (OperatorRow & { avatar: string | null })[];
     const count = db.prepare("SELECT COUNT(*) AS n FROM passkeys WHERE operator_did = ?");
     return {
       operators: rows.map((r) => ({
         did: r.did,
         handle: r.handle,
+        avatar: r.avatar ?? undefined,
         addedAt: r.added_at,
         enrolledAt: r.enrolled_at,
         passkeys: (count.get(r.did) as { n: number }).n,

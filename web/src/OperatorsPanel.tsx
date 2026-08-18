@@ -4,6 +4,7 @@ import { api } from "./api.js";
 interface Operator {
   did: string;
   handle: string;
+  avatar?: string;
   addedAt: number;
   enrolledAt: number | null;
   passkeys: number;
@@ -65,9 +66,14 @@ export function OperatorsPanel() {
       )}
       {operators.map((o) => (
         <div key={o.did} className="passkey-row">
-          <span>
+          <span className="handle-cell">
+            {o.avatar ? (
+              <img className="avatar" src={o.avatar} alt="" loading="lazy" />
+            ) : (
+              <span className="avatar" aria-hidden="true" />
+            )}
             @{o.handle}
-            {o.enrolledAt == null && <span className="mono-dim"> invited</span>}
+            {o.enrolledAt == null && <span className="mono-dim">invited</span>}
           </span>
           <span className="mono-dim">
             {o.enrolledAt != null

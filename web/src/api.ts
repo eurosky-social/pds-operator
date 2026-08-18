@@ -150,6 +150,7 @@ export const api = {
       operators: {
         did: string;
         handle: string;
+        avatar?: string;
         addedAt: number;
         enrolledAt: number | null;
         passkeys: number;
