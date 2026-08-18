@@ -703,6 +703,69 @@ button.kebab {
   justify-content: flex-end;
 }
 
+/* per-account stats modal, wider than the password one so the chart has room */
+.modal.stats-modal {
+  max-width: 36rem;
+}
+
+.account-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.account-head .avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.account-head h3 {
+  margin: 0;
+}
+
+.account-sub {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.account-status {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.account-status.takendown {
+  color: var(--error);
+}
+
+.account-status.deactivated {
+  color: var(--warn);
+}
+
+.stats-modal .stats-strip {
+  margin-bottom: 0;
+}
+
+.stats-modal .chart {
+  margin-top: 20px;
+}
+
+.stats-modal .modal-actions {
+  margin-top: 16px;
+}
+
+.account-actions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.account-actions li {
+  margin-bottom: 2px;
+}
+
 .invite-actions {
   display: flex;
   gap: 6px;

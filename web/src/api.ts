@@ -54,6 +54,26 @@ export interface Stats {
   labels: { name: string; n: number }[];
 }
 
+export interface AccountStats {
+  account: {
+    did: string;
+    handle: string;
+    email?: string;
+    status: string;
+    avatar?: string;
+    indexedAt: string;
+  };
+  labels: { src: string; val: string; cts: string }[];
+  activity: {
+    writesByDay: { day: string; n: number }[];
+    windowWrites: number;
+    activeDaysInWindow: number;
+    allTimeWrites: number;
+    firstActive: string | null;
+    lastActive: string | null;
+  };
+}
+
 export const api = {
   session: () =>
     req<{
@@ -111,6 +131,12 @@ export const api = {
   stats: (days = 30, months = 12, activeDays = 30) =>
     req<Stats>(
       `/api/stats?days=${days}&months=${months}&activeDays=${activeDays}&tz=${encodeURIComponent(
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+      )}`,
+    ),
+  accountStats: (did: string, days = 30) =>
+    req<AccountStats>(
+      `/api/stats/accounts/${encodeURIComponent(did)}?days=${days}&tz=${encodeURIComponent(
         Intl.DateTimeFormat().resolvedOptions().timeZone,
       )}`,
     ),

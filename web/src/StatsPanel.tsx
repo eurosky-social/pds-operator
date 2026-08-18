@@ -8,7 +8,7 @@ const monthLabel = (m: string) =>
     .toLowerCase();
 
 // "2026-07-05" -> "7/5"
-const dayLabel = (day: string) => {
+export const dayLabel = (day: string) => {
   const [, m, d] = day.split("-");
   return `${Number(m)}/${Number(d)}`;
 };
@@ -24,7 +24,7 @@ function useIsMobile() {
   return mobile;
 }
 
-function usePersisted(key: string, allowed: number[], fallback: number) {
+export function usePersisted(key: string, allowed: number[], fallback: number) {
   const [value, setValue] = useState(() => {
     const saved = Number(localStorage.getItem(key));
     return allowed.includes(saved) ? saved : fallback;
@@ -36,7 +36,7 @@ function usePersisted(key: string, allowed: number[], fallback: number) {
   return [value, set] as const;
 }
 
-function ChartHead({
+export function ChartHead({
   title,
   value,
   options,
@@ -67,7 +67,7 @@ function ChartHead({
   );
 }
 
-function Bars({
+export function Bars({
   data,
   labels,
   ariaLabel,

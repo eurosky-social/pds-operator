@@ -188,4 +188,76 @@ export function registerStatsRoutes(app: FastifyInstance, db: Db, labelers: Watc
       labels,
     };
   });
+
+  app.get("/api/stats/accounts/:did", { preHandler: requireAuth }, async (req, reply) => {
+    const { did } = req.params as { did: string };
+    const query = req.query as { days?: string; tz?: string };
+    const days = [7, 30, 90].includes(Number(query.days)) ? Number(query.days) : 30;
+    const tz = query.tz && isValidTimeZone(query.tz) ? query.tz : "UTC";
+    const localDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: tz });
+
+    const account = db
+      .prepare("SELECT did, handle, email, status, avatar, indexed_at FROM accounts WHERE did = ?")
+      .get(did) as
+      | {
+          did: string;
+          handle: string;
+          email: string | null;
+          status: string;
+          avatar: string | null;
+          indexed_at: string;
+        }
+      | undefined;
+    if (!account) return reply.code(404).send({ error: "account not found" });
+
+    const labels = db
+      .prepare("SELECT src, val, cts FROM labels WHERE did = ? ORDER BY cts")
+      .all(did) as { src: string; val: string; cts: string }[];
+
+    const now = Date.now();
+    const hourCutoff = (offsetDays: number) =>
+      new Date(now - offsetDays * 86_400_000).toISOString().slice(0, 13);
+
+    // same hour-to-local-day regrouping as the site-wide chart, scoped to one did
+    const hourRows = db
+      .prepare("SELECT hour, SUM(events) AS n FROM activity WHERE did = ? AND hour >= ? GROUP BY hour")
+      .all(did, hourCutoff(days + 1)) as { hour: string; n: number }[];
+    const byDay = new Map<string, number>();
+    for (const r of hourRows) {
+      const day = localDay(new Date(`${r.hour}:00:00Z`));
+      byDay.set(day, (byDay.get(day) ?? 0) + r.n);
+    }
+    const writesByDay: { day: string; n: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const day = localDay(new Date(now - i * 86_400_000));
+      writesByDay.push({ day, n: byDay.get(day) ?? 0 });
+    }
+
+    const totals = db
+      .prepare(
+        `SELECT COALESCE(SUM(events), 0) AS allTimeWrites, MIN(hour) AS firstHour, MAX(hour) AS lastHour
+         FROM activity WHERE did = ?`,
+      )
+      .get(did) as { allTimeWrites: number; firstHour: string | null; lastHour: string | null };
+
+    return {
+      account: {
+        did: account.did,
+        handle: account.handle,
+        email: account.email ?? undefined,
+        status: account.status,
+        avatar: account.avatar ?? undefined,
+        indexedAt: account.indexed_at,
+      },
+      labels,
+      activity: {
+        writesByDay,
+        windowWrites: writesByDay.reduce((sum, d) => sum + d.n, 0),
+        activeDaysInWindow: writesByDay.filter((d) => d.n > 0).length,
+        allTimeWrites: totals.allTimeWrites,
+        firstActive: totals.firstHour ? `${totals.firstHour}:00:00Z` : null,
+        lastActive: totals.lastHour ? `${totals.lastHour}:00:00Z` : null,
+      },
+    };
+  });
 }

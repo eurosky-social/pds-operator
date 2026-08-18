@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api, type Account } from "./api.js";
+import { AccountStatsModal } from "./AccountStatsModal.js";
 import { useToast } from "./useToast.js";
 
 const PAGE_SIZES = [25, 50, 100, 250];
@@ -42,6 +43,7 @@ export function AccountsPanel({
   const [passwordResult, setPasswordResult] = useState<{ handle: string; password: string } | null>(
     null,
   );
+  const [statsDid, setStatsDid] = useState<string | null>(null);
   const [toast, showToast] = useToast();
 
   const copy = (text: string, what: string, e: React.MouseEvent) => {
@@ -218,6 +220,15 @@ export function AccountsPanel({
                     role="menuitem"
                     onClick={() => {
                       setMenuDid(null);
+                      setStatsDid(a.did);
+                    }}
+                  >
+                    view stats
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuDid(null);
                       window.open(`${appviewUrl}/profile/${a.did}`, "_blank", "noopener");
                     }}
                   >
@@ -349,6 +360,14 @@ export function AccountsPanel({
           </label>
         </div>
         {toast}
+        {statsDid && (
+          <AccountStatsModal
+            did={statsDid}
+            appviewUrl={appviewUrl}
+            showEmail={!hideEmails}
+            onClose={() => setStatsDid(null)}
+          />
+        )}
         {passwordResult && (
           <div className="modal-backdrop" onClick={() => setPasswordResult(null)}>
             <div
