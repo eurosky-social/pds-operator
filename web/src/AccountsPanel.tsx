@@ -122,6 +122,14 @@ export function AccountsPanel({
     return () => clearTimeout(id);
   }, [refresh, query]);
 
+  // while any purge is running, poll so its progress ticks up in the table
+  const anyPurging = accounts.some((a) => a.purge && a.purge.status !== "error");
+  useEffect(() => {
+    if (!anyPurging) return;
+    const id = setInterval(refresh, 4000);
+    return () => clearInterval(id);
+  }, [anyPurging, refresh]);
+
   const loadMore = () => {
     setLoading(true);
     api
@@ -215,6 +223,13 @@ export function AccountsPanel({
         }`}
       >
         {a.status ?? "active"}
+        {a.purge && (
+          <div className={`purge-tag ${a.purge.status === "error" ? "error" : ""}`}>
+            {a.purge.status === "error"
+              ? "purge failed"
+              : `purging… ${a.purge.deleted.toLocaleString()} deleted`}
+          </div>
+        )}
       </td>
       <td className="mono-dim">{new Date(a.indexedAt).toLocaleDateString()}</td>
       <td className="mono-dim storage-cell">{formatBytes(a.storageBytes)}</td>
@@ -310,7 +325,7 @@ export function AccountsPanel({
                   >
                     reset password
                   </button>
-                  {a.status === "takendown" && (
+                  {a.status === "takendown" && !a.purge && (
                     <button
                       className="danger"
                       role="menuitem"

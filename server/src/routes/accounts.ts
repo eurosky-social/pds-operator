@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { PdsClient } from "../pdsClient.js";
 import { watchedLabelPredicate, type WatchedLabeler } from "../labelerClient.js";
 import type { AccountRow, Db, LabelRow } from "../db.js";
+import type { PurgeRunner } from "../purge.js";
 import { requireAuth } from "../auth.js";
 import { recordAction } from "../auditLog.js";
 
@@ -15,6 +16,8 @@ interface ApiAccount {
   labels: string[];
   /** repo CAR bytes + blob bytes; null until the first storage sweep measures it */
   storageBytes: number | null;
+  /** live record-purge job for this account, if any */
+  purge?: { status: string; deleted: number };
 }
 
 export function registerAccountRoutes(
@@ -22,6 +25,7 @@ export function registerAccountRoutes(
   pds: PdsClient,
   db: Db,
   labelers: WatchedLabeler[],
+  purger: PurgeRunner,
 ) {
   const watchBysrc = new Map(labelers.map((l) => [l.did, l.watch]));
 
@@ -44,6 +48,12 @@ export function registerAccountRoutes(
       set.add(row.val);
       labelsByDid.set(row.did, set);
     }
+    const purgeRows = db
+      .prepare(
+        `SELECT did, status, deleted FROM purge_jobs WHERE did IN (${params}) AND status != 'done'`,
+      )
+      .all(...rows.map((r) => r.did)) as { did: string; status: string; deleted: number }[];
+    const purgeByDid = new Map(purgeRows.map((p) => [p.did, p]));
     return rows.map((r) => ({
       did: r.did,
       handle: r.handle,
@@ -53,6 +63,9 @@ export function registerAccountRoutes(
       avatar: r.avatar ?? undefined,
       labels: [...(labelsByDid.get(r.did) ?? [])].sort(),
       storageBytes: r.repo_bytes == null ? null : r.repo_bytes + (r.blob_bytes ?? 0),
+      purge: purgeByDid.has(r.did)
+        ? { status: purgeByDid.get(r.did)!.status, deleted: purgeByDid.get(r.did)!.deleted }
+        : undefined,
     }));
   }
 
@@ -143,7 +156,8 @@ export function registerAccountRoutes(
     const { did } = req.params as { did: string };
     // purging is permanent, so only allowed on accounts already taken down: the
     // takedown step is the reversible part of the flow, this one is not. The account
-    // itself survives so the handle stays taken
+    // itself survives so the handle stays taken. The work runs as a paced background
+    // job, so this only enqueues it and returns
     const row = db.prepare("SELECT status FROM accounts WHERE did = ?").get(did) as
       | { status: string }
       | undefined;
@@ -151,9 +165,14 @@ export function registerAccountRoutes(
     if (row.status !== "takendown") {
       return reply.code(409).send({ error: "account must be taken down before purging records" });
     }
-    const { deleted } = await pds.purgeAllRecords(did);
-    await recordAction({ operator: req.session.operator!, action: "purge-records", target: did });
-    return { ok: true, deleted };
+    const job = purger.enqueue(did, req.session.operator!);
+    return { ok: true, status: job.status, deleted: job.deleted };
+  });
+
+  app.get("/api/accounts/:did/purge-records", { preHandler: requireAuth }, async (req) => {
+    const { did } = req.params as { did: string };
+    const job = purger.get(did);
+    return { job: job ? { status: job.status, deleted: job.deleted, error: job.error } : null };
   });
 
   app.post("/api/accounts/:did/reset-password", { preHandler: requireAuth }, async (req) => {

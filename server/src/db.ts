@@ -99,6 +99,21 @@ export function openDb(file?: string) {
       token_hash TEXT PRIMARY KEY,
       expires_at INTEGER NOT NULL
     );
+
+    -- record-purge jobs run in the background, one at a time, deleting a taken-down
+    -- account's records in paced rounds. 'enabled' is the safety flag: 1 whenever the
+    -- account is (or might be) lifted out of takedown, so a reconciler can force it
+    -- back down after a crash. The account survives; only its records are deleted.
+    CREATE TABLE IF NOT EXISTS purge_jobs (
+      did TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'pending',
+      deleted INTEGER NOT NULL DEFAULT 0,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      operator TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   const addColumn = (table: string, name: string, ddl: string) => {

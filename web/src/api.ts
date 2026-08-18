@@ -23,6 +23,7 @@ export interface Account {
   avatar?: string;
   labels?: string[];
   storageBytes?: number | null;
+  purge?: { status: string; deleted: number };
 }
 
 export const formatBytes = (n: number | null | undefined): string => {
@@ -126,7 +127,7 @@ export const api = {
   },
   takedown: (did: string) => req<{ ok: true }>(`/api/accounts/${encodeURIComponent(did)}/takedown`, { method: "POST" }),
   enable: (did: string) => req<{ ok: true }>(`/api/accounts/${encodeURIComponent(did)}/enable`, { method: "POST" }),
-  purgeRecords: (did: string) => req<{ ok: true; deleted: number }>(`/api/accounts/${encodeURIComponent(did)}/purge-records`, { method: "POST" }),
+  purgeRecords: (did: string) => req<{ ok: true; status: string; deleted: number }>(`/api/accounts/${encodeURIComponent(did)}/purge-records`, { method: "POST" }),
   resetPassword: (did: string) => req<{ ok: true; password: string }>(`/api/accounts/${encodeURIComponent(did)}/reset-password`, { method: "POST" }),
   cursorStatus: () => req<CursorStatus>("/api/status/cursor"),
   requestCrawl: (relay?: string) =>
