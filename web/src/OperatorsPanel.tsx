@@ -72,7 +72,7 @@ export function OperatorsPanel() {
             ) : (
               <span className="avatar" aria-hidden="true" />
             )}
-            @{o.handle}
+            {o.handle}
             {o.enrolledAt == null && <span className="mono-dim">invited</span>}
           </span>
           <span className="mono-dim">
