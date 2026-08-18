@@ -157,7 +157,8 @@ export function registerStatsRoutes(app: FastifyInstance, db: Db, labelers: Watc
       .prepare(
         `SELECT a.did, a.handle, a.avatar, SUM(ev.events) AS n
          FROM activity ev JOIN accounts a ON a.did = ev.did
-         WHERE ev.hour >= ? GROUP BY ev.did ORDER BY n DESC LIMIT 5`,
+         WHERE a.status != 'takendown' AND ev.hour >= ?
+         GROUP BY ev.did ORDER BY n DESC LIMIT 5`,
       )
       .all(hourCutoff(activeDays)) as {
       did: string;
