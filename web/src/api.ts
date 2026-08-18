@@ -96,9 +96,11 @@ export const api = {
   session: () =>
     req<{
       authenticated: boolean;
+      operator: string | null;
       appviewUrl: string;
       pdsHostname: string;
       passwordLogin: boolean;
+      pendingAdmins: boolean;
     }>("/api/session"),
   login: (password: string) => req<{ ok: true }>("/api/login", { method: "POST", body: JSON.stringify({ password }) }),
   logout: () => req<{ ok: true }>("/api/logout", { method: "POST" }),
@@ -139,7 +141,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, response, enrollToken }),
     }),
-  passkeys: () => req<{ passkeys: { id: string; name: string; createdAt: number }[] }>("/api/passkeys"),
+  passkeys: () =>
+    req<{ passkeys: { id: string; name: string; createdAt: number; operator: string | null }[] }>(
+      "/api/passkeys",
+    ),
+  operators: () =>
+    req<{
+      operators: {
+        did: string;
+        handle: string;
+        addedAt: number;
+        enrolledAt: number | null;
+        passkeys: number;
+      }[];
+    }>("/api/operators"),
+  operatorAdd: (handle: string) =>
+    req<{ ok: true; did: string }>("/api/operators", {
+      method: "POST",
+      body: JSON.stringify({ handle }),
+    }),
+  operatorRemove: (did: string) =>
+    req<{ ok: true }>(`/api/operators/${encodeURIComponent(did)}`, { method: "DELETE" }),
   passkeyDelete: (id: string) =>
     req<{ ok: true }>(`/api/passkeys/${encodeURIComponent(id)}`, { method: "DELETE" }),
   invites: () =>

@@ -20,7 +20,7 @@ interface Facet {
   features: Record<string, unknown>[];
 }
 
-async function resolveHandleToDid(pdsHostname: string, handle: string): Promise<string> {
+export async function resolveHandleToDid(pdsHostname: string, handle: string): Promise<string> {
   const res = await fetch(
     `https://${pdsHostname}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`,
   );

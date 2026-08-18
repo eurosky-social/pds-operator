@@ -848,6 +848,11 @@ button.kebab {
   justify-content: flex-end;
 }
 
+.panel-note {
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+
 .passkey-row {
   display: flex;
   align-items: center;

@@ -6,6 +6,7 @@ interface Passkey {
   id: string;
   name: string;
   createdAt: number;
+  operator: string | null;
 }
 
 export function PasskeysPanel() {
@@ -62,7 +63,10 @@ export function PasskeysPanel() {
       )}
       {passkeys.map((p) => (
         <div key={p.id} className="passkey-row">
-          <span>{p.name}</span>
+          <span>
+            {p.name}
+            {p.operator && <span className="mono-dim"> @{p.operator}</span>}
+          </span>
           <span className="mono-dim">{new Date(p.createdAt).toLocaleDateString()}</span>
           <button disabled={busy} onClick={() => remove(p.id)}>
             remove

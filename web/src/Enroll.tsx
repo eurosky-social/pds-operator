@@ -7,6 +7,7 @@ export function Enroll({
   pdsHostname,
   onEnrolled,
 }: {
+  /** one-time token, minted by the CLI or by the admin OAuth callback */
   token: string;
   pdsHostname: string;
   onEnrolled: () => void;

@@ -5,15 +5,24 @@ import { api } from "./api.js";
 export function Login({
   pdsHostname,
   passwordLogin,
+  pendingAdmins,
   onLoggedIn,
 }: {
   pdsHostname: string;
   passwordLogin: boolean;
+  pendingAdmins: boolean;
   onLoggedIn: () => void;
 }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // invited admins prove their DID via atproto OAuth before creating a passkey
+  const [showNewAdmin, setShowNewAdmin] = useState(false);
+  const [adminHandle, setAdminHandle] = useState("");
+  const [error, setError] = useState<string | null>(() => {
+    const err = new URLSearchParams(window.location.search).get("adminError");
+    if (err) window.history.replaceState(null, "", "/");
+    return err;
+  });
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -71,6 +80,32 @@ export function Login({
           ) : (
             <button type="button" disabled={busy} onClick={() => setShowPassword(true)}>
               use password
+            </button>
+          ))}
+        {pendingAdmins &&
+          (showNewAdmin ? (
+            <>
+              <input
+                placeholder="your handle (e.g. alice.bsky.social)"
+                value={adminHandle}
+                onChange={(e) => setAdminHandle(e.target.value)}
+                autoFocus
+              />
+              <button
+                type="button"
+                disabled={busy || !adminHandle.trim()}
+                onClick={() => {
+                  window.location.href = `/api/oauth/start?handle=${encodeURIComponent(
+                    adminHandle.trim(),
+                  )}`;
+                }}
+              >
+                verify with your account
+              </button>
+            </>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => setShowNewAdmin(true)}>
+              new admin
             </button>
           ))}
         {error && <span className="error-text">{error}</span>}

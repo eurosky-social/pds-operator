@@ -91,6 +91,16 @@ With DMs enabled you also get an alert when a single account creates a burst of 
 `ACTIVITY_ALERT_CREATES` and `ACTIVITY_ALERT_WINDOW_MINUTES`, disable with
 `ACTIVITY_ALERT_CREATES=0`. At most one alert per account per window.
 
+### Admins
+
+The dashboard supports multiple named admins. Add someone by handle in the Admins panel,
+then a "new admin" button appears on the sign-in page. They verify their atproto account
+via OAuth (identity only, no permissions granted) and create a passkey once. From then on
+they sign in with the passkey, and the audit log records actions under their handle.
+Enrollment is one shot per admin. To reset someone (lost device), remove and re-add them,
+which deletes their passkeys and reopens enrollment. `npm run enroll` remains the
+bootstrap and break-glass path, those passkeys sign in as the generic "operator".
+
 ## Dev
 
 ```

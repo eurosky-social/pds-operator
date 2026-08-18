@@ -20,6 +20,8 @@ import { registerPasskeyRoutes } from "./routes/passkeys.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerInviteRoutes } from "./routes/invites.js";
 import { registerStatsRoutes } from "./routes/stats.js";
+import { registerOperatorRoutes } from "./routes/operators.js";
+import { createOAuthClient } from "./oauth.js";
 import { BskyDmNotifier } from "./notifier.js";
 
 const {
@@ -161,8 +163,17 @@ if (!OPERATOR_PASSWORD_HASH) {
   );
 }
 
-registerAuthRoutes(app, OPERATOR_PASSWORD_HASH ?? null, appviewUrl, PDS_HOSTNAME!);
+// admin enrollment proves DIDs via atproto OAuth; the dashboard URL doubles as the
+// OAuth client identity (loopback client in dev, hosted metadata in prod)
+const dashboardUrl = (DASHBOARD_URL ?? `http://localhost:${Number(PORT ?? 8787)}`).replace(
+  /\/$/,
+  "",
+);
+const oauth = createOAuthClient(dashboardUrl);
+
+registerAuthRoutes(app, OPERATOR_PASSWORD_HASH ?? null, appviewUrl, PDS_HOSTNAME!, db);
 registerAccountRoutes(app, pds, db, labelers);
+registerOperatorRoutes(app, db, PDS_HOSTNAME!, oauth, dashboardUrl);
 registerStatusRoutes(app, pds, relay, PDS_HOSTNAME!, db);
 registerPasskeyRoutes(app, db, PDS_HOSTNAME!);
 registerAuditRoutes(app);

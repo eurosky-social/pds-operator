@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import bcrypt from "bcryptjs";
+import type { Db } from "./db.js";
 
 declare module "@fastify/session" {
   interface FastifySessionObject {
@@ -15,6 +16,7 @@ export function registerAuthRoutes(
   passwordHash: string | null,
   appviewUrl: string,
   pdsHostname: string,
+  db: Db,
 ) {
   const attempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -47,11 +49,18 @@ export function registerAuthRoutes(
   });
 
   app.get("/api/session", async (req) => {
+    // an admin invited via OAuth but without a passkey yet: the login page shows
+    // the "new admin" entry point only while such an invite is open
+    const pendingAdmins = Boolean(
+      db.prepare("SELECT 1 FROM operators WHERE enrolled_at IS NULL LIMIT 1").get(),
+    );
     return {
       authenticated: Boolean(req.session.operator),
+      operator: req.session.operator ?? null,
       appviewUrl,
       pdsHostname,
       passwordLogin: Boolean(passwordHash),
+      pendingAdmins,
     };
   });
 }

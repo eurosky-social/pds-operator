@@ -13,6 +13,9 @@
     "enroll": "tsx src/cli.ts enroll"
   },
   "dependencies": {
+    "@atcute/identity-resolver": "^2.0.1",
+    "@atcute/identity-resolver-node": "^2.0.1",
+    "@atcute/oauth-node-client": "^2.0.1",
     "@fastify/cookie": "^11.0.2",
     "@fastify/helmet": "^13.1.0",
     "@fastify/session": "^11.1.0",

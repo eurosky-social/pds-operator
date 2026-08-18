@@ -9,6 +9,7 @@ import { RequestCrawl } from "./RequestCrawl.js";
 import { SyncFooter } from "./SyncFooter.js";
 import { InvitesPanel } from "./InvitesPanel.js";
 import { StatsPanel } from "./StatsPanel.js";
+import { OperatorsPanel } from "./OperatorsPanel.js";
 import { Enroll } from "./Enroll.js";
 
 export function App() {
@@ -16,6 +17,7 @@ export function App() {
   const [appviewUrl, setAppviewUrl] = useState("https://bsky.app");
   const [pdsHostname, setPdsHostname] = useState("");
   const [passwordLogin, setPasswordLogin] = useState(true);
+  const [pendingAdmins, setPendingAdmins] = useState(false);
   const [lastFullSync, setLastFullSync] = useState<string | null>(null);
   // object wrapper so clicking the same handle twice still retriggers the search
   const [accountSearch, setAccountSearch] = useState<{ q: string } | null>(null);
@@ -31,6 +33,7 @@ export function App() {
         if (s.appviewUrl) setAppviewUrl(s.appviewUrl);
         if (s.pdsHostname) setPdsHostname(s.pdsHostname);
         setPasswordLogin(s.passwordLogin ?? true);
+        setPendingAdmins(s.pendingAdmins ?? false);
       })
       .catch(() => setAuthed(false));
   }, []);
@@ -50,6 +53,7 @@ export function App() {
       <Login
         pdsHostname={pdsHostname}
         passwordLogin={passwordLogin}
+        pendingAdmins={pendingAdmins}
         onLoggedIn={() => setAuthed(true)}
       />
     );
@@ -74,6 +78,7 @@ export function App() {
       <AccountsPanel appviewUrl={appviewUrl} searchFor={accountSearch} />
       <StatsPanel onSearchAccount={(handle) => setAccountSearch({ q: handle })} />
       <InvitesPanel />
+      <OperatorsPanel />
       <PasskeysPanel />
       <AuditPanel />
       <SyncFooter lastFullSync={lastFullSync} />

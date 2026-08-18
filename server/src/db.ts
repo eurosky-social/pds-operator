@@ -86,25 +86,41 @@ export function openDb(file?: string) {
       created_at INTEGER NOT NULL
     );
 
+    -- named admins, keyed by their atproto DID. enrolled_at is set once they have
+    -- proven the DID via OAuth and created their passkey; null means invited only
+    CREATE TABLE IF NOT EXISTS operators (
+      did TEXT PRIMARY KEY,
+      handle TEXT NOT NULL,
+      added_at INTEGER NOT NULL,
+      enrolled_at INTEGER
+    );
+
     CREATE TABLE IF NOT EXISTS enroll_tokens (
       token_hash TEXT PRIMARY KEY,
       expires_at INTEGER NOT NULL
     );
   `);
 
+  const addColumn = (table: string, name: string, ddl: string) => {
+    const has = db
+      .prepare(`SELECT COUNT(*) AS n FROM pragma_table_info('${table}') WHERE name = ?`)
+      .get(name) as { n: number };
+    if (has.n === 0) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  };
   // storage columns: rev tracks the repo head and storage_at the last measurement,
   // so the sweep only re-measures changed repos, at most so often
-  const addAccountColumn = (name: string, ddl: string) => {
-    const has = db
-      .prepare("SELECT COUNT(*) AS n FROM pragma_table_info('accounts') WHERE name = ?")
-      .get(name) as { n: number };
-    if (has.n === 0) db.exec(`ALTER TABLE accounts ADD COLUMN ${ddl}`);
-  };
-  addAccountColumn("rev", "rev TEXT NOT NULL DEFAULT ''");
-  addAccountColumn("repo_bytes", "repo_bytes INTEGER");
-  addAccountColumn("blob_bytes", "blob_bytes INTEGER");
-  addAccountColumn("storage_rev", "storage_rev TEXT");
-  addAccountColumn("storage_at", "storage_at INTEGER");
+  addColumn("accounts", "rev", "rev TEXT NOT NULL DEFAULT ''");
+  addColumn("accounts", "repo_bytes", "repo_bytes INTEGER");
+  addColumn("accounts", "blob_bytes", "blob_bytes INTEGER");
+  addColumn("accounts", "storage_rev", "storage_rev TEXT");
+  addColumn("accounts", "storage_at", "storage_at INTEGER");
+  // passkeys enrolled through the admin OAuth flow belong to a named operator;
+  // legacy CLI-enrolled passkeys keep a null owner and sign in as "operator"
+  addColumn("passkeys", "operator_did", "operator_did TEXT");
+  // enroll tokens minted by the OAuth callback carry the verified DID, so the
+  // enrollment can hop from the 127.0.0.1 callback origin back to the dashboard
+  // origin without relying on a session cookie
+  addColumn("enroll_tokens", "operator_did", "operator_did TEXT");
 
   // activity was briefly bucketed by whole day; re-home those rows at UTC midnight
   const legacyDayColumn = db
@@ -150,27 +166,34 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export function createEnrollToken(db: Db): { token: string; expiresAt: number } {
+export function createEnrollToken(
+  db: Db,
+  operatorDid: string | null = null,
+): { token: string; expiresAt: number } {
   db.prepare("DELETE FROM enroll_tokens WHERE expires_at <= ?").run(Date.now());
   const token = randomBytes(32).toString("base64url");
   const expiresAt = Date.now() + ENROLL_TOKEN_TTL_MS;
-  db.prepare("INSERT INTO enroll_tokens (token_hash, expires_at) VALUES (?, ?)").run(
-    hashToken(token),
-    expiresAt,
-  );
+  db.prepare(
+    "INSERT INTO enroll_tokens (token_hash, expires_at, operator_did) VALUES (?, ?, ?)",
+  ).run(hashToken(token), expiresAt, operatorDid);
   return { token, expiresAt };
 }
 
-export function checkEnrollToken(db: Db, token: string): boolean {
+/** Valid-token lookup without consuming it. */
+export function peekEnrollToken(db: Db, token: string): { operatorDid: string | null } | null {
   const row = db
-    .prepare("SELECT 1 FROM enroll_tokens WHERE token_hash = ? AND expires_at > ?")
-    .get(hashToken(token), Date.now());
-  return Boolean(row);
+    .prepare("SELECT operator_did FROM enroll_tokens WHERE token_hash = ? AND expires_at > ?")
+    .get(hashToken(token), Date.now()) as { operator_did: string | null } | undefined;
+  return row ? { operatorDid: row.operator_did } : null;
 }
 
-export function consumeEnrollToken(db: Db, token: string): boolean {
-  const res = db
-    .prepare("DELETE FROM enroll_tokens WHERE token_hash = ? AND expires_at > ?")
-    .run(hashToken(token), Date.now());
-  return res.changes > 0;
+export function checkEnrollToken(db: Db, token: string): boolean {
+  return peekEnrollToken(db, token) != null;
+}
+
+export function consumeEnrollToken(db: Db, token: string): { operatorDid: string | null } | null {
+  const found = peekEnrollToken(db, token);
+  if (!found) return null;
+  db.prepare("DELETE FROM enroll_tokens WHERE token_hash = ?").run(hashToken(token));
+  return found;
 }

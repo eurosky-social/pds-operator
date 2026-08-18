@@ -6,7 +6,7 @@ import {
   verifyAuthenticationResponse,
   type AuthenticatorTransportFuture,
 } from "@simplewebauthn/server";
-import { checkEnrollToken, consumeEnrollToken, type Db } from "../db.js";
+import { checkEnrollToken, consumeEnrollToken, peekEnrollToken, type Db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { recordAction } from "../auditLog.js";
 
@@ -23,6 +23,7 @@ interface PasskeyRow {
   transports: string | null;
   name: string | null;
   created_at: number;
+  operator_did: string | null;
 }
 
 // The dashboard runs on localhost in dev and its real domain in prod; derive the
@@ -36,9 +37,22 @@ function rpFromRequest(req: FastifyRequest): { rpID: string; origin: string } {
 export function registerPasskeyRoutes(app: FastifyInstance, db: Db, pdsHostname: string) {
   const allPasskeys = () => db.prepare("SELECT * FROM passkeys").all() as PasskeyRow[];
 
-  // Enrollment is authorized by an operator session OR a one-time token minted by
-  // the CLI (`npm run enroll`) — the bootstrap path for passkey-only deployments.
-  // Guessing tokens is rate-limited per IP on top of the 15-minute expiry.
+  /** The pending operator a valid OAuth-minted enroll token belongs to, if any. */
+  const tokenOperator = (req: FastifyRequest): { did: string; handle: string } | null => {
+    const token = (req.body as { enrollToken?: string } | null)?.enrollToken;
+    if (!token) return null;
+    const info = peekEnrollToken(db, token);
+    if (!info?.operatorDid) return null;
+    const row = db
+      .prepare("SELECT handle FROM operators WHERE did = ? AND enrolled_at IS NULL")
+      .get(info.operatorDid) as { handle: string } | undefined;
+    return row ? { did: info.operatorDid, handle: row.handle } : null;
+  };
+
+  // Enrollment is authorized by an operator session OR a one-time token — minted by
+  // the CLI (`npm run enroll`, the bootstrap path) or by the OAuth callback for an
+  // invited admin. Guessing tokens is rate-limited per IP on top of the 15-minute
+  // expiry.
   const enrollAttempts = new Map<string, { count: number; resetAt: number }>();
   function enrollAuthorized(req: FastifyRequest): boolean {
     if (req.session.operator) return true;
@@ -63,7 +77,7 @@ export function registerPasskeyRoutes(app: FastifyInstance, db: Db, pdsHostname:
     const options = await generateRegistrationOptions({
       rpName: `${pdsHostname} admin`,
       rpID,
-      userName: "operator",
+      userName: tokenOperator(req)?.handle ?? req.session.operator ?? "operator",
       attestationType: "none",
       excludeCredentials: allPasskeys().map((p) => ({
         id: p.id,
@@ -100,17 +114,42 @@ export function registerPasskeyRoutes(app: FastifyInstance, db: Db, pdsHostname:
       return reply.code(400).send({ error: "passkey verification failed" });
     }
 
-    // consume the one-time token only after a verified registration
+    // bind the passkey to its owner. tokens are consumed only after the verified
+    // registration: a CLI token signs in as the generic operator, an OAuth-minted
+    // token carries the invited admin's DID and completes their one-shot enrollment
+    let operatorDid: string | null = null;
     if (!req.session.operator) {
-      if (!enrollToken || !consumeEnrollToken(db, enrollToken)) {
+      const consumed = enrollToken ? consumeEnrollToken(db, enrollToken) : null;
+      if (!consumed) {
         return reply.code(401).send({ error: "enrollment link expired" });
       }
-      req.session.operator = "operator"; // enrolling the passkey signs you in
+      if (consumed.operatorDid) {
+        const op = db
+          .prepare("SELECT handle FROM operators WHERE did = ? AND enrolled_at IS NULL")
+          .get(consumed.operatorDid) as { handle: string } | undefined;
+        if (!op) {
+          return reply.code(401).send({ error: "this admin enrollment is no longer open" });
+        }
+        operatorDid = consumed.operatorDid;
+        db.prepare("UPDATE operators SET enrolled_at = ? WHERE did = ?").run(
+          Date.now(),
+          consumed.operatorDid,
+        );
+        req.session.operator = op.handle;
+      } else {
+        req.session.operator = "operator";
+      }
+    } else {
+      // an already signed-in named admin adding another device keeps ownership
+      const owner = db
+        .prepare("SELECT did FROM operators WHERE handle = ?")
+        .get(req.session.operator) as { did: string } | undefined;
+      operatorDid = owner?.did ?? null;
     }
 
     const { credential } = verification.registrationInfo;
     db.prepare(
-      "INSERT INTO passkeys (id, public_key, counter, transports, name, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO passkeys (id, public_key, counter, transports, name, created_at, operator_did) VALUES (?, ?, ?, ?, ?, ?, ?)",
     ).run(
       credential.id,
       Buffer.from(credential.publicKey),
@@ -118,6 +157,7 @@ export function registerPasskeyRoutes(app: FastifyInstance, db: Db, pdsHostname:
       JSON.stringify(credential.transports ?? []),
       name?.trim() || null,
       Date.now(),
+      operatorDid,
     );
     await recordAction({
       operator: req.session.operator!,
@@ -128,11 +168,15 @@ export function registerPasskeyRoutes(app: FastifyInstance, db: Db, pdsHostname:
   });
 
   app.get("/api/passkeys", { preHandler: requireAuth }, async () => {
+    const handleFor = db.prepare("SELECT handle FROM operators WHERE did = ?");
     return {
       passkeys: allPasskeys().map((p) => ({
         id: p.id,
         name: p.name ?? "unnamed",
         createdAt: p.created_at,
+        operator: p.operator_did
+          ? ((handleFor.get(p.operator_did) as { handle: string } | undefined)?.handle ?? null)
+          : null,
       })),
     };
   });
@@ -200,7 +244,12 @@ export function registerPasskeyRoutes(app: FastifyInstance, db: Db, pdsHostname:
       verification.authenticationInfo.newCounter,
       row.id,
     );
-    req.session.operator = "operator";
+    const owner = row.operator_did
+      ? (db.prepare("SELECT handle FROM operators WHERE did = ?").get(row.operator_did) as
+          | { handle: string }
+          | undefined)
+      : undefined;
+    req.session.operator = owner?.handle ?? "operator";
     return { ok: true };
   });
 }
