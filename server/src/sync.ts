@@ -225,20 +225,33 @@ export class Syncer {
     );
   }
 
+  /**
+   * Avatar URLs come straight from the PDS: read each account's profile record and
+   * point at the blob endpoint. No appview dependency, so it works for accounts the
+   * relay never crawled, at the cost of raw blobs instead of CDN-resized thumbnails.
+   */
   private async fetchAvatars(dids: string[]): Promise<Map<string, string>> {
     const avatarByDid = new Map<string, string>();
-    await mapLimit(chunks(dids, 25), FETCH_CONCURRENCY, async (batch) => {
-      const params = new URLSearchParams();
-      for (const did of batch) params.append("actors", did);
+    await mapLimit(dids, FETCH_CONCURRENCY, async (did) => {
+      const repo = encodeURIComponent(did);
       try {
         const res = await fetchWithRetry(
-          `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfiles?${params}`,
+          `https://${this.pds.hostname}/xrpc/com.atproto.repo.getRecord?repo=${repo}&collection=app.bsky.actor.profile&rkey=self`,
         );
-        if (!res.ok) return;
-        const { profiles } = (await res.json()) as { profiles: { did: string; avatar?: string }[] };
-        for (const p of profiles) if (p.avatar) avatarByDid.set(p.did, p.avatar);
+        if (!res.ok) return; // no profile record, or repo unavailable (e.g. takendown)
+        const { value } = (await res.json()) as {
+          value?: { avatar?: { ref?: { $link?: string }; cid?: string } };
+        };
+        // blob refs are {ref: {$link}} in current repos, {cid} in legacy ones
+        const cid = value?.avatar?.ref?.$link ?? value?.avatar?.cid;
+        if (cid) {
+          avatarByDid.set(
+            did,
+            `https://${this.pds.hostname}/xrpc/com.atproto.sync.getBlob?did=${repo}&cid=${cid}`,
+          );
+        }
       } catch (err) {
-        this.log.warn({ err }, "avatar batch failed");
+        this.log.warn({ err, did }, "avatar fetch failed");
       }
     });
     return avatarByDid;

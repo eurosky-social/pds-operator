@@ -11,6 +11,8 @@ export interface NotifierConfig {
   recipient: string;
   /** base URL of this dashboard, used to build deep links */
   dashboardUrl: string;
+  /** the operator's PDS, which resolves handles (local or remote) without an appview */
+  pdsHostname: string;
 }
 
 interface Facet {
@@ -18,9 +20,9 @@ interface Facet {
   features: Record<string, unknown>[];
 }
 
-async function resolveHandleToDid(handle: string): Promise<string> {
+async function resolveHandleToDid(pdsHostname: string, handle: string): Promise<string> {
   const res = await fetch(
-    `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`,
+    `https://${pdsHostname}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`,
   );
   if (!res.ok) throw new Error(`resolveHandle(${handle}) failed: ${res.status}`);
   const { did } = (await res.json()) as { did: string };
@@ -56,7 +58,7 @@ export class BskyDmNotifier {
 
   /** Resolve the sender's DID + PDS from their handle, then create a session there. */
   private async createSession(): Promise<void> {
-    const did = await resolveHandleToDid(this.cfg.handle);
+    const did = await resolveHandleToDid(this.cfg.pdsHostname, this.cfg.handle);
     const pds = await resolvePdsEndpoint(did);
     const res = await fetch(`${pds}/xrpc/com.atproto.server.createSession`, {
       method: "POST",
@@ -152,7 +154,7 @@ export class BskyDmNotifier {
 
   private async ensureConvo(): Promise<string> {
     if (this.convoId) return this.convoId;
-    this.recipientDid ??= await resolveHandleToDid(this.cfg.recipient);
+    this.recipientDid ??= await resolveHandleToDid(this.cfg.pdsHostname, this.cfg.recipient);
     const { convo } = await this.chatXrpc(
       `chat.bsky.convo.getConvoForMembers?members=${encodeURIComponent(this.recipientDid)}`,
     );

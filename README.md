@@ -20,9 +20,10 @@ The server keeps a local SQLite copy of everything in `server/data.sqlite`. A ba
 syncer does a full pass against the PDS on startup and every 15 minutes. Between passes
 it stays subscribed to the PDS firehose and each labeler's label stream, so handle
 changes, takedowns, and new labels land within seconds. Stream cursors survive restarts,
-and dead sockets are detected and reconnected. Requests to outside services (avatars,
-label backfill) are throttled and retried with backoff when rate limited. The SQLite
-file is a rebuildable cache. The only data worth backing up is `server/audit.log`.
+and dead sockets are detected and reconnected. Avatars and handle resolution go through
+the PDS itself, not the Bluesky appview. Requests to outside services (label backfill)
+are throttled and retried with backoff when rate limited. The SQLite file is a
+rebuildable cache. The only data worth backing up is `server/audit.log`.
 
 ## Setup
 

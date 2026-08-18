@@ -59,7 +59,7 @@ await app.register(fastifyHelmet, {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "https:", "data:"], // avatars come from the appview CDN
+      imgSrc: ["'self'", "https:", "data:"], // avatars come from the PDS blob endpoint
       connectSrc: ["'self'"],
       frameAncestors: ["'none'"],
     },
@@ -109,6 +109,7 @@ const notifier =
           appPassword: NOTIFY_APP_PASSWORD,
           recipient: NOTIFY_RECIPIENT,
           dashboardUrl: DASHBOARD_URL.replace(/\/$/, ""),
+          pdsHostname: PDS_HOSTNAME!,
         },
         app.log,
       )
