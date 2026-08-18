@@ -287,6 +287,81 @@ export class PdsClient {
     return this.countBody(res);
   }
 
+  /**
+   * Permanently delete every record in an account's repo while keeping the account
+   * itself, so the handle stays taken. The admin API can't write to user repos, so:
+   * reset the account's password, lift the takedown just long enough to sign in as
+   * the account and delete records in batches, then re-apply the takedown (also on
+   * failure). Blobs are not touched. Accounts with email 2FA will fail the sign-in;
+   * the error surfaces to the caller and the takedown is restored.
+   */
+  async purgeAllRecords(did: string): Promise<{ deleted: number }> {
+    const { password } = await this.resetAccountPassword(did);
+    await this.setAccountTakedown(did, false);
+    try {
+      const sessionRes = await fetch(
+        `https://${this.hostname}/xrpc/com.atproto.server.createSession`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: did, password }),
+        },
+      );
+      if (!sessionRes.ok) {
+        const body = await sessionRes.text().catch(() => "");
+        throw new Error(`purge sign-in as ${did} failed: ${sessionRes.status} ${body}`);
+      }
+      const { accessJwt } = (await sessionRes.json()) as { accessJwt: string };
+      const userXrpc = async (path: string, opts: RequestInit = {}): Promise<any> => {
+        const res = await fetch(`https://${this.hostname}/xrpc/${path}`, {
+          ...opts,
+          headers: {
+            ...opts.headers,
+            Authorization: `Bearer ${accessJwt}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`purge ${path} failed: ${res.status} ${body}`);
+        }
+        return res.json();
+      };
+
+      const repo = encodeURIComponent(did);
+      const { collections } = (await userXrpc(`com.atproto.repo.describeRepo?repo=${repo}`)) as {
+        collections: string[];
+      };
+      let deleted = 0;
+      for (const collection of collections) {
+        // delete page by page from the start until the collection is empty
+        for (let batch = 0; ; batch++) {
+          if (batch > 10_000) throw new Error(`purge of ${collection} for ${did} not converging`);
+          const { records } = (await userXrpc(
+            `com.atproto.repo.listRecords?repo=${repo}&collection=${encodeURIComponent(collection)}&limit=100`,
+          )) as { records: { uri: string }[] };
+          if (records.length === 0) break;
+          await userXrpc("com.atproto.repo.applyWrites", {
+            method: "POST",
+            body: JSON.stringify({
+              repo: did,
+              writes: records.map((r) => ({
+                $type: "com.atproto.repo.applyWrites#delete",
+                collection,
+                rkey: r.uri.split("/").pop(),
+              })),
+            }),
+          });
+          deleted += records.length;
+        }
+      }
+      return { deleted };
+    } finally {
+      // the account must never stay enabled, restore the takedown no matter what
+      await this.setAccountTakedown(did, true);
+    }
+  }
+
   async getInviteCodes(limit = 100): Promise<{ codes: InviteCode[] }> {
     return this.xrpc(`com.atproto.admin.getInviteCodes?sort=recent&limit=${limit}`) as Promise<{
       codes: InviteCode[];

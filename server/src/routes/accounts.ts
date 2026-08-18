@@ -139,6 +139,23 @@ export function registerAccountRoutes(
     return { ok: true };
   });
 
+  app.post("/api/accounts/:did/purge-records", { preHandler: requireAuth }, async (req, reply) => {
+    const { did } = req.params as { did: string };
+    // purging is permanent, so only allowed on accounts already taken down: the
+    // takedown step is the reversible part of the flow, this one is not. The account
+    // itself survives so the handle stays taken
+    const row = db.prepare("SELECT status FROM accounts WHERE did = ?").get(did) as
+      | { status: string }
+      | undefined;
+    if (!row) return reply.code(404).send({ error: "account not found" });
+    if (row.status !== "takendown") {
+      return reply.code(409).send({ error: "account must be taken down before purging records" });
+    }
+    const { deleted } = await pds.purgeAllRecords(did);
+    await recordAction({ operator: req.session.operator!, action: "purge-records", target: did });
+    return { ok: true, deleted };
+  });
+
   app.post("/api/accounts/:did/reset-password", { preHandler: requireAuth }, async (req) => {
     const { did } = req.params as { did: string };
     const { password } = await pds.resetAccountPassword(did);

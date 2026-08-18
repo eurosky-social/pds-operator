@@ -39,7 +39,10 @@ export function AccountsPanel({
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [searchFor]);
   const [busyDid, setBusyDid] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<{ did: string; action: "status" | "reset" } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    did: string;
+    action: "status" | "reset" | "delete";
+  } | null>(null);
   const [menuDid, setMenuDid] = useState<string | null>(null);
   const [passwordResult, setPasswordResult] = useState<{ handle: string; password: string } | null>(
     null,
@@ -137,7 +140,10 @@ export function AccountsPanel({
       .finally(() => setLoading(false));
   };
 
-  const runAction = async (did: string, action: "takedown" | "enable" | "resetPassword") => {
+  const runAction = async (
+    did: string,
+    action: "takedown" | "enable" | "resetPassword" | "purgeRecords",
+  ) => {
     setBusyDid(did);
     setConfirm(null);
     try {
@@ -237,12 +243,15 @@ export function AccountsPanel({
                     onClick={() => {
                       setMenuDid(null);
                       if (confirm.action === "reset") runAction(a.did, "resetPassword");
+                      else if (confirm.action === "delete") runAction(a.did, "purgeRecords");
                       else runAction(a.did, a.status === "takendown" ? "enable" : "takedown");
                     }}
                   >
                     {confirm.action === "reset"
                       ? "confirm reset password"
-                      : `confirm ${a.status === "takendown" ? "enable" : "takedown"}`}
+                      : confirm.action === "delete"
+                        ? "confirm delete forever"
+                        : `confirm ${a.status === "takendown" ? "enable" : "takedown"}`}
                   </button>
                   <button role="menuitem" onClick={() => setConfirm(null)}>
                     cancel
@@ -301,6 +310,15 @@ export function AccountsPanel({
                   >
                     reset password
                   </button>
+                  {a.status === "takendown" && (
+                    <button
+                      className="danger"
+                      role="menuitem"
+                      onClick={() => setConfirm({ did: a.did, action: "delete" })}
+                    >
+                      delete all records
+                    </button>
+                  )}
                 </>
               )}
             </div>
