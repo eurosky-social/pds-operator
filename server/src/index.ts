@@ -22,7 +22,6 @@ import { registerInviteRoutes } from "./routes/invites.js";
 import { registerStatsRoutes } from "./routes/stats.js";
 import { registerOperatorRoutes } from "./routes/operators.js";
 import { createOAuthClient } from "./oauth.js";
-import { PurgeRunner } from "./purge.js";
 import { BskyDmNotifier } from "./notifier.js";
 
 const {
@@ -145,15 +144,9 @@ const db = openDb();
 const syncer = new Syncer(db, pds, labelers, app.log, notifier, labelNames, activityAlert);
 syncer.start();
 
-// paced background record-purge; resumes in-flight jobs and re-hides any account a
-// crash left enabled mid-purge
-const purger = new PurgeRunner(db, pds, app.log);
-purger.start();
-
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.once(sig, () => {
     syncer.stop();
-    purger.stop();
     void app.close().finally(() => process.exit(0));
   });
 }
@@ -179,7 +172,7 @@ const dashboardUrl = (DASHBOARD_URL ?? `http://localhost:${Number(PORT ?? 8787)}
 const oauth = createOAuthClient(dashboardUrl);
 
 registerAuthRoutes(app, OPERATOR_PASSWORD_HASH ?? null, appviewUrl, PDS_HOSTNAME!, db);
-registerAccountRoutes(app, pds, db, labelers, purger);
+registerAccountRoutes(app, pds, db, labelers);
 registerOperatorRoutes(app, db, PDS_HOSTNAME!, oauth, dashboardUrl);
 registerStatusRoutes(app, pds, relay, PDS_HOSTNAME!, db);
 registerPasskeyRoutes(app, db, PDS_HOSTNAME!);

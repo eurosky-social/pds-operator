@@ -568,17 +568,6 @@ td.storage-cell {
   white-space: nowrap;
 }
 
-/* live purge progress under an account's status */
-.purge-tag {
-  font-size: 13px;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
-
-.purge-tag.error {
-  color: var(--error);
-}
-
 td.status-cell {
   max-width: 110px;
   white-space: nowrap;

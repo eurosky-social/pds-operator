@@ -39,10 +39,7 @@ export function AccountsPanel({
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [searchFor]);
   const [busyDid, setBusyDid] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<{
-    did: string;
-    action: "status" | "reset" | "delete";
-  } | null>(null);
+  const [confirm, setConfirm] = useState<{ did: string; action: "status" | "reset" } | null>(null);
   const [menuDid, setMenuDid] = useState<string | null>(null);
   const [passwordResult, setPasswordResult] = useState<{ handle: string; password: string } | null>(
     null,
@@ -122,14 +119,6 @@ export function AccountsPanel({
     return () => clearTimeout(id);
   }, [refresh, query]);
 
-  // while any purge is running, poll so its progress ticks up in the table
-  const anyPurging = accounts.some((a) => a.purge && a.purge.status !== "error");
-  useEffect(() => {
-    if (!anyPurging) return;
-    const id = setInterval(refresh, 4000);
-    return () => clearInterval(id);
-  }, [anyPurging, refresh]);
-
   const loadMore = () => {
     setLoading(true);
     api
@@ -148,10 +137,7 @@ export function AccountsPanel({
       .finally(() => setLoading(false));
   };
 
-  const runAction = async (
-    did: string,
-    action: "takedown" | "enable" | "resetPassword" | "purgeRecords",
-  ) => {
+  const runAction = async (did: string, action: "takedown" | "enable" | "resetPassword") => {
     setBusyDid(did);
     setConfirm(null);
     try {
@@ -223,13 +209,6 @@ export function AccountsPanel({
         }`}
       >
         {a.status ?? "active"}
-        {a.purge && (
-          <div className={`purge-tag ${a.purge.status === "error" ? "error" : ""}`}>
-            {a.purge.status === "error"
-              ? "purge failed"
-              : `purging… ${a.purge.deleted.toLocaleString()} deleted`}
-          </div>
-        )}
       </td>
       <td className="mono-dim">{new Date(a.indexedAt).toLocaleDateString()}</td>
       <td className="mono-dim storage-cell">{formatBytes(a.storageBytes)}</td>
@@ -258,15 +237,12 @@ export function AccountsPanel({
                     onClick={() => {
                       setMenuDid(null);
                       if (confirm.action === "reset") runAction(a.did, "resetPassword");
-                      else if (confirm.action === "delete") runAction(a.did, "purgeRecords");
                       else runAction(a.did, a.status === "takendown" ? "enable" : "takedown");
                     }}
                   >
                     {confirm.action === "reset"
                       ? "confirm reset password"
-                      : confirm.action === "delete"
-                        ? "confirm delete forever"
-                        : `confirm ${a.status === "takendown" ? "enable" : "takedown"}`}
+                      : `confirm ${a.status === "takendown" ? "enable" : "takedown"}`}
                   </button>
                   <button role="menuitem" onClick={() => setConfirm(null)}>
                     cancel
@@ -325,15 +301,6 @@ export function AccountsPanel({
                   >
                     reset password
                   </button>
-                  {a.status !== "active" && !a.purge && (
-                    <button
-                      className="danger"
-                      role="menuitem"
-                      onClick={() => setConfirm({ did: a.did, action: "delete" })}
-                    >
-                      delete all records
-                    </button>
-                  )}
                 </>
               )}
             </div>
