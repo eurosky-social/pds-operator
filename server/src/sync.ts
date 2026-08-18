@@ -6,6 +6,9 @@ import { setSyncState, getSyncState, type Db } from "./db.js";
 import type { BskyDmNotifier } from "./notifier.js";
 
 const FULL_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+// a changed repo is re-measured at most this often, so busy accounts don't cost a
+// CAR download on every sync
+const STORAGE_REMEASURE_MS = 6 * 60 * 60 * 1000;
 const DIRTY_FLUSH_MS = 5_000;
 const RECONNECT_MS = 10_000;
 const FETCH_CONCURRENCY = 4;
@@ -104,6 +107,7 @@ export class Syncer {
   private sockets: WebSocket[] = [];
   private stopped = false;
   private syncing = false;
+  private sweepingStorage = false;
   private timers: NodeJS.Timeout[] = [];
   // latest firehose seq, persisted on the flush tick — a write per frame would hammer SQLite
   private accountCursor: number | null = null;
@@ -195,14 +199,15 @@ export class Syncer {
     const avatarByDid = await this.fetchAvatars(dids);
 
     const upsert = this.db.prepare(`
-      INSERT INTO accounts (did, handle, email, indexed_at, status, avatar, updated_at)
-      VALUES (@did, @handle, @email, @indexed_at, @status, @avatar, @updated_at)
+      INSERT INTO accounts (did, handle, email, indexed_at, status, avatar, rev, updated_at)
+      VALUES (@did, @handle, @email, @indexed_at, @status, @avatar, @rev, @updated_at)
       ON CONFLICT(did) DO UPDATE SET
         handle = excluded.handle,
         email = excluded.email,
         indexed_at = excluded.indexed_at,
         status = excluded.status,
         avatar = excluded.avatar,
+        rev = excluded.rev,
         updated_at = excluded.updated_at
     `);
     this.db.transaction(() => {
@@ -215,13 +220,15 @@ export class Syncer {
           indexed_at: info?.indexedAt ?? "",
           status: repoStatusToAccountStatus(repo),
           avatar: avatarByDid.get(repo.did) ?? null,
+          rev: repo.rev ?? repo.head ?? "",
           updated_at: Date.now(),
         });
       }
-      // drop accounts (and their labels/activity) that no longer exist on the PDS
+      // drop accounts (and their labels/activity/blob sizes) that no longer exist on the PDS
       const params = dids.map(() => "?").join(",");
       this.db.prepare(`DELETE FROM labels WHERE did NOT IN (SELECT did FROM accounts)`).run();
       this.db.prepare(`DELETE FROM activity WHERE did NOT IN (SELECT did FROM accounts)`).run();
+      this.db.prepare(`DELETE FROM blob_sizes WHERE did NOT IN (SELECT did FROM accounts)`).run();
       this.db.prepare(`DELETE FROM activity WHERE hour < date('now', '-400 days')`).run();
       if (dids.length > 0) {
         this.db.prepare(`DELETE FROM accounts WHERE did NOT IN (${params})`).run(...dids);
@@ -229,11 +236,81 @@ export class Syncer {
     })();
 
     await this.backfillLabels(dids);
+    // storage runs detached: a long first sweep must not delay the sync heartbeat
+    void this.syncStorage().catch((err) => this.log.error({ err }, "storage sweep failed"));
     setSyncState(this.db, "last_full_sync", new Date().toISOString());
     this.log.info(
       { accounts: repos.length, ms: Date.now() - started },
       "full sync complete",
     );
+  }
+
+  /**
+   * Measure storage per account: repo CAR bytes plus blob bytes. Repo revs plus a
+   * time floor gate the work (only repos that changed since their last measurement,
+   * each at most every STORAGE_REMEASURE_MS), and blob sizes are cached per cid
+   * since blobs are immutable. First run walks everything; later runs touch only
+   * changed repos, so the sweep is cheap enough to run detached on every sync.
+   */
+  private async syncStorage() {
+    if (this.sweepingStorage) return; // a slow sweep must not overlap the next one
+    this.sweepingStorage = true;
+    try {
+      const stale = this.db
+        .prepare(
+          `SELECT did, rev FROM accounts
+           WHERE (storage_rev IS NULL OR storage_rev != rev)
+             AND (storage_at IS NULL OR storage_at < ?)`,
+        )
+        .all(Date.now() - STORAGE_REMEASURE_MS) as { did: string; rev: string }[];
+      if (stale.length === 0) return;
+      const started = Date.now();
+      await mapLimit(stale, FETCH_CONCURRENCY, async ({ did, rev }) => {
+        if (this.stopped) return;
+        try {
+          const repoBytes = await this.pds.repoCarBytes(did);
+          const cids = await this.pds.listBlobCids(did);
+          const known = new Map(
+            (
+              this.db.prepare("SELECT cid, bytes FROM blob_sizes WHERE did = ?").all(did) as {
+                cid: string;
+                bytes: number;
+              }[]
+            ).map((r) => [r.cid, r.bytes]),
+          );
+          const insert = this.db.prepare(
+            "INSERT OR REPLACE INTO blob_sizes (did, cid, bytes) VALUES (?, ?, ?)",
+          );
+          // a listed cid can 404 (blob lost or never imported), so count it as 0
+          // and cache the 0 so it isn't refetched every sweep
+          const fresh = [...new Set(cids)].filter((cid) => !known.has(cid));
+          await mapLimit(fresh, FETCH_CONCURRENCY, async (cid) => {
+            const bytes = await this.pds.blobBytes(did, cid).catch(() => 0);
+            insert.run(did, cid, bytes);
+            known.set(cid, bytes);
+          });
+          const present = new Set(cids);
+          let blobBytes = 0;
+          for (const cid of present) blobBytes += known.get(cid) ?? 0;
+          const remove = this.db.prepare("DELETE FROM blob_sizes WHERE did = ? AND cid = ?");
+          for (const cid of known.keys()) if (!present.has(cid)) remove.run(did, cid);
+          this.db
+            .prepare(
+              `UPDATE accounts SET repo_bytes = ?, blob_bytes = ?, storage_rev = ?, storage_at = ?
+               WHERE did = ?`,
+            )
+            .run(repoBytes, blobBytes, rev, Date.now(), did);
+        } catch (err) {
+          this.log.warn({ err, did }, "storage measurement failed");
+        }
+      });
+      this.log.info(
+        { accounts: stale.length, ms: Date.now() - started },
+        "storage sweep complete",
+      );
+    } finally {
+      this.sweepingStorage = false;
+    }
   }
 
   /**
@@ -399,14 +476,15 @@ export class Syncer {
     );
 
     const upsert = this.db.prepare(`
-      INSERT INTO accounts (did, handle, email, indexed_at, status, avatar, updated_at)
-      VALUES (@did, @handle, @email, @indexed_at, @status, @avatar, @updated_at)
+      INSERT INTO accounts (did, handle, email, indexed_at, status, avatar, rev, updated_at)
+      VALUES (@did, @handle, @email, @indexed_at, @status, @avatar, @rev, @updated_at)
       ON CONFLICT(did) DO UPDATE SET
         handle = excluded.handle,
         email = excluded.email,
         indexed_at = excluded.indexed_at,
         status = excluded.status,
         avatar = excluded.avatar,
+        rev = excluded.rev,
         updated_at = excluded.updated_at
     `);
     this.db.transaction(() => {
@@ -421,6 +499,7 @@ export class Syncer {
           indexed_at: info?.indexedAt ?? "",
           status: repoStatusToAccountStatus(repo),
           avatar: avatarByDid.get(did) ?? null,
+          rev: repo.rev ?? repo.head ?? "",
           updated_at: Date.now(),
         });
       }

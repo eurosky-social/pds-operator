@@ -13,6 +13,8 @@ interface ApiAccount {
   status: string;
   avatar?: string;
   labels: string[];
+  /** repo CAR bytes + blob bytes; null until the first storage sweep measures it */
+  storageBytes: number | null;
 }
 
 export function registerAccountRoutes(
@@ -50,6 +52,7 @@ export function registerAccountRoutes(
       status: r.status,
       avatar: r.avatar ?? undefined,
       labels: [...(labelsByDid.get(r.did) ?? [])].sort(),
+      storageBytes: r.repo_bytes == null ? null : r.repo_bytes + (r.blob_bytes ?? 0),
     }));
   }
 
@@ -62,6 +65,7 @@ export function registerAccountRoutes(
       offset?: string;
       limit?: string;
       hideTakendown?: string;
+      sort?: string;
     };
     const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 500);
     const offset = Math.max(Number(query.offset) || 0, 0);
@@ -99,10 +103,14 @@ export function registerAccountRoutes(
         `SELECT COUNT(*) AS flaggedTotal FROM accounts ${whereSql} ${whereSql ? "AND" : "WHERE"} ${flagExpr}`,
       )
       .get(...params, ...flagParams) as { flaggedTotal: number };
+    const orderBy =
+      query.sort === "storage"
+        ? "COALESCE(repo_bytes, 0) + COALESCE(blob_bytes, 0) DESC, indexed_at DESC"
+        : "is_flagged DESC, indexed_at DESC";
     const rows = db
       .prepare(
         `SELECT *, ${flagExpr} AS is_flagged FROM accounts ${whereSql}
-         ORDER BY is_flagged DESC, indexed_at DESC LIMIT ? OFFSET ?`,
+         ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
       )
       .all(...flagParams, ...params, limit, offset) as AccountRow[];
 

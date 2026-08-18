@@ -10,6 +10,11 @@ export interface AccountRow {
   indexed_at: string;
   status: "active" | "takendown" | "deactivated";
   avatar: string | null;
+  rev: string;
+  repo_bytes: number | null;
+  blob_bytes: number | null;
+  storage_rev: string | null;
+  storage_at: number | null;
 }
 
 export interface LabelRow {
@@ -63,6 +68,15 @@ export function openDb(file?: string) {
       value TEXT NOT NULL
     );
 
+    -- per-blob sizes, fetched once per cid (blobs are immutable) so the storage
+    -- sweep only pays for new blobs
+    CREATE TABLE IF NOT EXISTS blob_sizes (
+      did TEXT NOT NULL,
+      cid TEXT NOT NULL,
+      bytes INTEGER NOT NULL,
+      PRIMARY KEY (did, cid)
+    );
+
     CREATE TABLE IF NOT EXISTS passkeys (
       id TEXT PRIMARY KEY,
       public_key BLOB NOT NULL,
@@ -77,6 +91,20 @@ export function openDb(file?: string) {
       expires_at INTEGER NOT NULL
     );
   `);
+
+  // storage columns: rev tracks the repo head and storage_at the last measurement,
+  // so the sweep only re-measures changed repos, at most so often
+  const addAccountColumn = (name: string, ddl: string) => {
+    const has = db
+      .prepare("SELECT COUNT(*) AS n FROM pragma_table_info('accounts') WHERE name = ?")
+      .get(name) as { n: number };
+    if (has.n === 0) db.exec(`ALTER TABLE accounts ADD COLUMN ${ddl}`);
+  };
+  addAccountColumn("rev", "rev TEXT NOT NULL DEFAULT ''");
+  addAccountColumn("repo_bytes", "repo_bytes INTEGER");
+  addAccountColumn("blob_bytes", "blob_bytes INTEGER");
+  addAccountColumn("storage_rev", "storage_rev TEXT");
+  addAccountColumn("storage_at", "storage_at INTEGER");
 
   // activity was briefly bucketed by whole day; re-home those rows at UTC midnight
   const legacyDayColumn = db

@@ -539,6 +539,25 @@ tr:hover td {
   flex-shrink: 0;
 }
 
+/* storage column header doubles as the sort toggle */
+button.th-sort {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap; /* keep the sort arrow beside the label */
+}
+
+button.th-sort:hover {
+  text-decoration: underline;
+}
+
+td.storage-cell {
+  white-space: nowrap;
+}
+
 td.status-cell {
   max-width: 110px;
   white-space: nowrap;
@@ -603,6 +622,20 @@ button.kebab {
   height: 1px;
   background: var(--border);
   margin: 4px 2px;
+}
+
+/* checkbox rows inside the accounts filters menu */
+.menu label.menu-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu label.menu-check:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .accounts-footer {
@@ -877,12 +910,6 @@ button.kebab {
   color: var(--text);
 }
 
-.accounts-toolbar label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
 
 /* stack account rows into cards: handle / did / status+indexed+menu */
 @media (max-width: 640px) {
@@ -991,13 +1018,13 @@ button.kebab {
     background: none;
   }
 
-  /* accounts: handle / did+email / status+indexed+menu */
+  /* accounts: handle / did+email / status+indexed+storage+menu */
   .accounts-table tbody tr {
-    grid-template-columns: max-content 1fr max-content;
+    grid-template-columns: max-content max-content 1fr max-content;
     grid-template-areas:
-      "handle handle handle"
-      "did    did    did"
-      "status indexed menu";
+      "handle handle  handle  handle"
+      "did    did     did     did"
+      "status indexed storage menu";
   }
 
   .accounts-table tbody td:nth-child(1) {
@@ -1030,6 +1057,10 @@ button.kebab {
   }
 
   .accounts-table tbody td:nth-child(5) {
+    grid-area: storage;
+  }
+
+  .accounts-table tbody td:nth-child(6) {
     grid-area: menu;
     justify-self: end;
   }

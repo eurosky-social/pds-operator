@@ -22,7 +22,22 @@ export interface Account {
   status?: "active" | "takendown" | "deactivated";
   avatar?: string;
   labels?: string[];
+  storageBytes?: number | null;
 }
+
+export const formatBytes = (n: number | null | undefined): string => {
+  if (n == null) return "—";
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = n;
+  let unit = "B";
+  for (const u of units) {
+    if (value < 1024) break;
+    value /= 1024;
+    unit = u;
+  }
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`;
+};
 
 export interface CursorStatus {
   relaySeq: number;
@@ -63,6 +78,8 @@ export interface AccountStats {
     avatar?: string;
     indexedAt: string;
     invitedBy?: { code: string; byHandle?: string };
+    repoBytes: number | null;
+    blobBytes: number | null;
   };
   labels: { src: string; val: string; cts: string }[];
   activity: {
@@ -85,12 +102,21 @@ export const api = {
     }>("/api/session"),
   login: (password: string) => req<{ ok: true }>("/api/login", { method: "POST", body: JSON.stringify({ password }) }),
   logout: () => req<{ ok: true }>("/api/logout", { method: "POST" }),
-  accounts: (opts: { q?: string; offset?: number; limit?: number; hideTakendown?: boolean } = {}) => {
+  accounts: (
+    opts: {
+      q?: string;
+      offset?: number;
+      limit?: number;
+      hideTakendown?: boolean;
+      sort?: "storage";
+    } = {},
+  ) => {
     const params = new URLSearchParams();
     if (opts.q) params.set("q", opts.q);
     if (opts.offset) params.set("offset", String(opts.offset));
     if (opts.limit) params.set("limit", String(opts.limit));
     if (opts.hideTakendown) params.set("hideTakendown", "1");
+    if (opts.sort) params.set("sort", opts.sort);
     const qs = params.toString();
     return req<{ accounts: Account[]; total: number; flaggedTotal: number }>(
       `/api/accounts${qs ? `?${qs}` : ""}`,

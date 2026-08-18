@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type AccountStats } from "./api.js";
+import { api, formatBytes, type AccountStats } from "./api.js";
 import { Bars, ChartHead, dayLabel, usePersisted } from "./StatsPanel.js";
 import { useToast } from "./useToast.js";
 
@@ -67,6 +67,14 @@ export function AccountStatsModal({
     { label: `Writes / ${days}d`, value: act?.windowWrites.toLocaleString() },
     { label: `Active Days / ${days}d`, value: act?.activeDaysInWindow.toLocaleString() },
     { label: "All-Time Writes", value: act?.allTimeWrites.toLocaleString() },
+    {
+      label: "Storage",
+      value:
+        data &&
+        (data.account.repoBytes == null
+          ? "—"
+          : formatBytes(data.account.repoBytes + (data.account.blobBytes ?? 0))),
+    },
   ];
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { api, type Account } from "./api.js";
+import { api, formatBytes, type Account } from "./api.js";
 import { AccountStatsModal } from "./AccountStatsModal.js";
 import { useToast } from "./useToast.js";
 
@@ -21,6 +21,7 @@ export function AccountsPanel({
     () => new URLSearchParams(window.location.search).get("q") ?? "",
   );
   const [hideTakendown, setHideTakendown] = useState(true);
+  const [sortStorage, setSortStorage] = useState(false);
   const [hideEmails, setHideEmails] = useState(
     () => localStorage.getItem("hideEmails") !== "0",
   );
@@ -44,6 +45,21 @@ export function AccountsPanel({
     null,
   );
   const [statsDid, setStatsDid] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent && e.key !== "Escape") return;
+      setFiltersOpen(false);
+    };
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [filtersOpen]);
   const [toast, showToast] = useToast();
 
   const copy = (text: string, what: string, e: React.MouseEvent) => {
@@ -82,7 +98,12 @@ export function AccountsPanel({
   const refresh = useCallback(() => {
     setLoading(true);
     api
-      .accounts({ q: query.trim() || undefined, limit: pageSize, hideTakendown })
+      .accounts({
+        q: query.trim() || undefined,
+        limit: pageSize,
+        hideTakendown,
+        sort: sortStorage ? "storage" : undefined,
+      })
       .then((r) => {
         setAccounts(r.accounts);
         setTotal(r.total);
@@ -91,7 +112,7 @@ export function AccountsPanel({
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [query, hideTakendown, pageSize]);
+  }, [query, hideTakendown, pageSize, sortStorage]);
 
   useEffect(() => {
     const id = setTimeout(refresh, query.trim() ? 300 : 0);
@@ -106,6 +127,7 @@ export function AccountsPanel({
         offset: accounts.length,
         limit: pageSize,
         hideTakendown,
+        sort: sortStorage ? "storage" : undefined,
       })
       .then((r) => {
         setAccounts((prev) => [...prev, ...r.accounts]);
@@ -141,6 +163,17 @@ export function AccountsPanel({
         <th>DID</th>
         <th>Status</th>
         <th>Indexed</th>
+        <th>
+          <button
+            type="button"
+            className="th-sort"
+            title="sort by storage"
+            aria-pressed={sortStorage}
+            onClick={() => setSortStorage((s) => !s)}
+          >
+            Storage{sortStorage ? " ↓" : ""}
+          </button>
+        </th>
         <th></th>
       </tr>
     </thead>
@@ -178,6 +211,7 @@ export function AccountsPanel({
         {a.status ?? "active"}
       </td>
       <td className="mono-dim">{new Date(a.indexedAt).toLocaleDateString()}</td>
+      <td className="mono-dim storage-cell">{formatBytes(a.storageBytes)}</td>
       <td>
         <div className="menu-wrap" onClick={(e) => e.stopPropagation()}>
           <button
@@ -279,11 +313,54 @@ export function AccountsPanel({
   return (
     <>
       <div className="panel" ref={panelRef}>
-        <h2>
-          Accounts ({total - flaggedTotal}
-          {query.trim() ? " matching" : ""}
-          {flaggedTotal > 0 ? ` + ${flaggedTotal} flagged` : ""})
-        </h2>
+        <div className="panel-head">
+          <h2>
+            Accounts ({total - flaggedTotal}
+            {query.trim() ? " matching" : ""}
+            {flaggedTotal > 0 ? ` + ${flaggedTotal} flagged` : ""})
+          </h2>
+          <div className="menu-wrap" onClick={(e) => e.stopPropagation()}>
+            <button
+              aria-haspopup="menu"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((o) => !o)}
+            >
+              filters
+            </button>
+            {filtersOpen && (
+              <div className="menu filters-menu" role="menu">
+                <label className="menu-check">
+                  <input
+                    type="checkbox"
+                    checked={hideTakendown}
+                    onChange={(e) => setHideTakendown(e.target.checked)}
+                  />
+                  hide taken down
+                </label>
+                <label className="menu-check">
+                  <input
+                    type="checkbox"
+                    checked={hideEmails}
+                    onChange={(e) => {
+                      setHideEmails(e.target.checked);
+                      localStorage.setItem("hideEmails", e.target.checked ? "1" : "0");
+                    }}
+                  />
+                  hide emails
+                </label>
+                <div className="menu-sep" />
+                <label className="menu-check">
+                  <input
+                    type="checkbox"
+                    checked={sortStorage}
+                    onChange={(e) => setSortStorage(e.target.checked)}
+                  />
+                  sort by storage
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
         <div className="accounts-toolbar">
           <span className="search-wrap">
             <input
@@ -303,25 +380,6 @@ export function AccountsPanel({
               </button>
             )}
           </span>
-          <label>
-            <input
-              type="checkbox"
-              checked={hideTakendown}
-              onChange={(e) => setHideTakendown(e.target.checked)}
-            />
-            hide taken down
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={hideEmails}
-              onChange={(e) => {
-                setHideEmails(e.target.checked);
-                localStorage.setItem("hideEmails", e.target.checked ? "1" : "0");
-              }}
-            />
-            hide emails
-          </label>
         </div>
         {error && <div className="error-text">{error}</div>}
         {!loading && accounts.length === 0 && !error && (

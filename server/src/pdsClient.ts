@@ -6,6 +6,8 @@ export interface RepoEntry {
   did: string;
   active?: boolean;
   status?: string;
+  head?: string;
+  rev?: string;
 }
 
 export interface AccountInfo {
@@ -199,6 +201,90 @@ export class PdsClient {
         takedown: takedown ? { applied: true } : { applied: false },
       }),
     });
+  }
+
+  /**
+   * Admin-authed raw fetch for sync endpoints, which stream bytes rather than JSON.
+   * Admin credentials also reach takendown/deactivated repos. Retries 429/5xx with
+   * backoff so the storage sweep can run at real concurrency; other 4xx throw.
+   */
+  private async authedFetch(path: string, tries = 3): Promise<Response> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < tries; attempt++) {
+      const accessJwt = this.adminIdentifier ? await this.ensureSession() : null;
+      const authorization = accessJwt
+        ? `Bearer ${accessJwt}`
+        : `Basic ${Buffer.from(`admin:${this.adminPassword}`).toString("base64")}`;
+      let res: Response;
+      try {
+        res = await fetch(`https://${this.hostname}/xrpc/${path}`, {
+          headers: { Authorization: authorization },
+        });
+      } catch (err) {
+        lastErr = err;
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+        continue;
+      }
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error(`PDS ${path} failed: ${res.status}`);
+        void res.body?.cancel().catch(() => {});
+        const retryAfter = Number(res.headers.get("retry-after"));
+        const delay = Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : 1000 * 2 ** attempt;
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`PDS ${path} failed: ${res.status} ${body}`);
+      }
+      return res;
+    }
+    throw lastErr ?? new Error(`PDS ${path} failed after ${tries} tries`);
+  }
+
+  private async countBody(res: Response): Promise<number> {
+    let bytes = 0;
+    if (res.body) {
+      for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+        bytes += chunk.length;
+      }
+    }
+    return bytes;
+  }
+
+  /** Size of the repo's current CAR export, a storage proxy for the record data. */
+  async repoCarBytes(did: string): Promise<number> {
+    const res = await this.authedFetch(`com.atproto.sync.getRepo?did=${encodeURIComponent(did)}`);
+    return this.countBody(res);
+  }
+
+  async listBlobCids(did: string): Promise<string[]> {
+    const cids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ did, limit: "500" });
+      if (cursor) params.set("cursor", cursor);
+      const res = await this.authedFetch(`com.atproto.sync.listBlobs?${params}`);
+      const page = (await res.json()) as { cids: string[]; cursor?: string };
+      cids.push(...page.cids);
+      cursor = page.cids.length > 0 ? page.cursor : undefined;
+    } while (cursor);
+    return cids;
+  }
+
+  /** Blob size from the content-length header, body cancelled unread when possible. */
+  async blobBytes(did: string, cid: string): Promise<number> {
+    const res = await this.authedFetch(
+      `com.atproto.sync.getBlob?did=${encodeURIComponent(did)}&cid=${encodeURIComponent(cid)}`,
+    );
+    const len = Number(res.headers.get("content-length"));
+    if (Number.isFinite(len) && len > 0) {
+      void res.body?.cancel().catch(() => {});
+      return len;
+    }
+    return this.countBody(res);
   }
 
   async getInviteCodes(limit = 100): Promise<{ codes: InviteCode[] }> {

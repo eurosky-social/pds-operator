@@ -203,7 +203,10 @@ export function registerStatsRoutes(
     const localDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: tz });
 
     const account = db
-      .prepare("SELECT did, handle, email, status, avatar, indexed_at FROM accounts WHERE did = ?")
+      .prepare(
+        `SELECT did, handle, email, status, avatar, indexed_at, repo_bytes, blob_bytes
+         FROM accounts WHERE did = ?`,
+      )
       .get(did) as
       | {
           did: string;
@@ -212,6 +215,8 @@ export function registerStatsRoutes(
           status: string;
           avatar: string | null;
           indexed_at: string;
+          repo_bytes: number | null;
+          blob_bytes: number | null;
         }
       | undefined;
     if (!account) return reply.code(404).send({ error: "account not found" });
@@ -272,6 +277,8 @@ export function registerStatsRoutes(
         avatar: account.avatar ?? undefined,
         indexedAt: account.indexed_at,
         invitedBy,
+        repoBytes: account.repo_bytes,
+        blobBytes: account.blob_bytes,
       },
       labels,
       activity: {
