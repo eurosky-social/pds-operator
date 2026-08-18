@@ -98,10 +98,20 @@ export function AccountStatsModal({
                 {data && data.account.status !== "active" ? data.account.status : ""}
               </span>
             </h3>
-            <div className="mono-dim account-sub">
+            <div className="mono-dim account-sub clip" title={did}>
               {did}
-              {showEmail && data?.account.email ? ` · ${data.account.email}` : ""}
             </div>
+            {showEmail && data?.account.email && (
+              <div className="mono-dim account-sub clip" title={data.account.email}>
+                {data.account.email}
+              </div>
+            )}
+            {data?.account.invitedBy && (
+              <div className="mono-dim account-sub">
+                invite code <span className="no-break">{data.account.invitedBy.code}</span>
+                {data.account.invitedBy.byHandle ? ` from @${data.account.invitedBy.byHandle}` : ""}
+              </div>
+            )}
           </div>
         </div>
         {error && <div className="error-text">{error}</div>}

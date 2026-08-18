@@ -33,6 +33,8 @@ export interface AdminAccount {
   status?: "active" | "takendown" | "deactivated";
   avatar?: string;
   labels?: string[];
+  /** the invite code this account signed up with; forAccount is the code's owner */
+  invitedBy?: { code: string; forAccount?: string };
 }
 
 export class PdsClient {

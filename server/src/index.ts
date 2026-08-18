@@ -167,7 +167,7 @@ registerStatusRoutes(app, pds, relay, PDS_HOSTNAME!, db);
 registerPasskeyRoutes(app, db, PDS_HOSTNAME!);
 registerAuditRoutes(app);
 registerInviteRoutes(app, pds);
-registerStatsRoutes(app, db, labelers);
+registerStatsRoutes(app, pds, db, labelers);
 
 const webDist = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 await app.register(fastifyStatic, { root: webDist });

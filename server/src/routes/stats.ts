@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { watchedLabelPredicate, type WatchedLabeler } from "../labelerClient.js";
 import type { Db } from "../db.js";
+import type { PdsClient } from "../pdsClient.js";
 import { requireAuth } from "../auth.js";
 
 function isValidTimeZone(tz: string): boolean {
@@ -12,7 +13,12 @@ function isValidTimeZone(tz: string): boolean {
   }
 }
 
-export function registerStatsRoutes(app: FastifyInstance, db: Db, labelers: WatchedLabeler[]) {
+export function registerStatsRoutes(
+  app: FastifyInstance,
+  pds: PdsClient,
+  db: Db,
+  labelers: WatchedLabeler[],
+) {
   const { expr: flagExpr, params: flagParams } = watchedLabelPredicate(labelers);
   const watchBySrc = new Map(labelers.map((l) => [l.did, l.watch]));
   const isWatched = (src: string, val: string) => {
@@ -240,6 +246,23 @@ export function registerStatsRoutes(app: FastifyInstance, db: Db, labelers: Watc
       )
       .get(did) as { allTimeWrites: number; firstHour: string | null; lastHour: string | null };
 
+    // which invite code the account signed up with, live from the PDS admin API.
+    // Best effort: not every PDS implementation reports it
+    let invitedBy: { code: string; byHandle?: string } | undefined;
+    try {
+      const info = await pds.getAccount(did);
+      if (info.invitedBy?.code) {
+        const owner = info.invitedBy.forAccount
+          ? (db.prepare("SELECT handle FROM accounts WHERE did = ?").get(info.invitedBy.forAccount) as
+              | { handle: string }
+              | undefined)
+          : undefined;
+        invitedBy = { code: info.invitedBy.code, byHandle: owner?.handle };
+      }
+    } catch (err) {
+      req.log.warn({ err, did }, "invite code lookup failed");
+    }
+
     return {
       account: {
         did: account.did,
@@ -248,6 +271,7 @@ export function registerStatsRoutes(app: FastifyInstance, db: Db, labelers: Watc
         status: account.status,
         avatar: account.avatar ?? undefined,
         indexedAt: account.indexed_at,
+        invitedBy,
       },
       labels,
       activity: {

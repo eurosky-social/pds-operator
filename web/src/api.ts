@@ -62,6 +62,7 @@ export interface AccountStats {
     status: string;
     avatar?: string;
     indexedAt: string;
+    invitedBy?: { code: string; byHandle?: string };
   };
   labels: { src: string; val: string; cts: string }[];
   activity: {

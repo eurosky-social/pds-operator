@@ -725,9 +725,42 @@ button.kebab {
   margin: 0;
 }
 
+.account-head-text {
+  min-width: 0; /* shrinkable flex child, so long lines clip instead of overflowing */
+}
+
 .account-sub {
   font-size: 13px;
-  overflow-wrap: anywhere;
+}
+
+/* dids and emails clip with an ellipsis rather than wrap mid-string on small screens */
+.account-sub.clip {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* invite codes move to their own line whole rather than break at a hyphen */
+.account-sub .no-break {
+  white-space: nowrap;
+}
+
+/* phones: avatar centered on top, text gets the full modal width so dids fit */
+@media (max-width: 640px) {
+  .account-head {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .account-head .avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .account-head-text {
+    width: 100%;
+  }
 }
 
 .account-status {
