@@ -325,7 +325,7 @@ export function AccountsPanel({
                   >
                     reset password
                   </button>
-                  {a.status === "takendown" && !a.purge && (
+                  {a.status !== "active" && !a.purge && (
                     <button
                       className="danger"
                       role="menuitem"

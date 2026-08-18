@@ -154,16 +154,19 @@ export function registerAccountRoutes(
 
   app.post("/api/accounts/:did/purge-records", { preHandler: requireAuth }, async (req, reply) => {
     const { did } = req.params as { did: string };
-    // purging is permanent, so only allowed on accounts already taken down: the
-    // takedown step is the reversible part of the flow, this one is not. The account
-    // itself survives so the handle stays taken. The work runs as a paced background
-    // job, so this only enqueues it and returns
+    // purging is permanent, so only allowed on accounts that are already hidden
+    // (taken down or deactivated): being hidden is the reversible part of the flow,
+    // this one is not. The account itself survives so the handle stays taken, and
+    // the purge always restores a takedown when done. Runs as a paced background job,
+    // so this only enqueues it and returns
     const row = db.prepare("SELECT status FROM accounts WHERE did = ?").get(did) as
       | { status: string }
       | undefined;
     if (!row) return reply.code(404).send({ error: "account not found" });
-    if (row.status !== "takendown") {
-      return reply.code(409).send({ error: "account must be taken down before purging records" });
+    if (row.status === "active") {
+      return reply
+        .code(409)
+        .send({ error: "account must be taken down or deactivated before purging records" });
     }
     const job = purger.enqueue(did, req.session.operator!);
     return { ok: true, status: job.status, deleted: job.deleted };

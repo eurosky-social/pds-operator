@@ -323,6 +323,22 @@ export class PdsClient {
   }
 
   /**
+   * Reactivate the account as itself so its repo accepts reads/writes. Needed before
+   * purging a deactivated account, whose repo otherwise rejects everything with
+   * RepoDeactivated. No-op if already active. The purge re-applies the takedown after.
+   */
+  async activateAccountAsUser(accessJwt: string): Promise<void> {
+    const res = await fetch(`https://${this.hostname}/xrpc/com.atproto.server.activateAccount`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessJwt}`, "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`activateAccount failed: ${res.status} ${body}`);
+    }
+  }
+
+  /**
    * Delete up to `limit` records from the account's repo as the signed-in account,
    * paced and 429-aware. Returns how many were deleted and whether the repo is now
    * empty. Callers delete in bounded chunks so the account spends only a short window

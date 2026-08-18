@@ -21,6 +21,7 @@ function fakePds(total: number, chunk: number) {
     async signInAsAccount() {
       return "jwt";
     },
+    async activateAccountAsUser() {},
     async deleteRecordsChunk() {
       const n = Math.min(chunk, remaining);
       remaining -= n;

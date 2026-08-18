@@ -128,6 +128,8 @@ export class PurgeRunner {
       try {
         await this.pds.setAccountTakedown(did, false);
         const jwt = await this.pds.signInAsAccount(did);
+        // a deactivated repo rejects writes, so reactivate before deleting
+        await this.pds.activateAccountAsUser(jwt);
         round = await this.pds.deleteRecordsChunk(jwt, did, CHUNK);
       } catch (err) {
         roundErr = err;
