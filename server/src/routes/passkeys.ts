@@ -74,12 +74,32 @@ export function registerPasskeyRoutes(app: FastifyInstance, db: Db, pdsHostname:
   app.post("/api/passkeys/options", async (req, reply) => {
     if (!enrollAuthorized(req)) return reply.code(401).send({ error: "not authorized" });
     const { rpID } = rpFromRequest(req);
+    // exclude only credentials already registered for the identity being enrolled:
+    // one device can hold passkeys for several admins (and the legacy operator),
+    // excluding them all would make the authenticator refuse a new admin outright
+    const owner = tokenOperator(req);
+    let existing: PasskeyRow[];
+    if (owner) {
+      existing = db
+        .prepare("SELECT * FROM passkeys WHERE operator_did = ?")
+        .all(owner.did) as PasskeyRow[];
+    } else if (req.session.operator && req.session.operator !== "operator") {
+      existing = db
+        .prepare(
+          "SELECT p.* FROM passkeys p JOIN operators o ON o.did = p.operator_did WHERE o.handle = ?",
+        )
+        .all(req.session.operator) as PasskeyRow[];
+    } else {
+      existing = db
+        .prepare("SELECT * FROM passkeys WHERE operator_did IS NULL")
+        .all() as PasskeyRow[];
+    }
     const options = await generateRegistrationOptions({
       rpName: `${pdsHostname} admin`,
       rpID,
-      userName: tokenOperator(req)?.handle ?? req.session.operator ?? "operator",
+      userName: owner?.handle ?? req.session.operator ?? "operator",
       attestationType: "none",
-      excludeCredentials: allPasskeys().map((p) => ({
+      excludeCredentials: existing.map((p) => ({
         id: p.id,
         transports: p.transports ? (JSON.parse(p.transports) as AuthenticatorTransportFuture[]) : undefined,
       })),
