@@ -129,3 +129,39 @@ test("account stream url resumes from the persisted cursor", () => {
     "wss://pds.test/xrpc/com.atproto.sync.subscribeRepos?cursor=42",
   );
 });
+
+test("fullSync re-reads avatars only for new accounts and moved revs", async () => {
+  let repos = [
+    { did: "did:plc:a", rev: "1" },
+    { did: "did:plc:b", rev: "1" },
+  ];
+  const pds = {
+    hostname: "pds.test",
+    listAllRepos: async () => repos,
+    accountInfos: async (dids: string[]) =>
+      dids.map((did) => ({ did, handle: did.slice(8) + ".test", indexedAt: "" })),
+  } as unknown as PdsClient;
+  const db = openDb(":memory:");
+  const syncer = new Syncer(db, pds, [], stubLogger);
+  const asked: string[][] = [];
+  (syncer as any).syncStorage = async () => {}; // storage is not under test
+  (syncer as any).fetchAvatars = async (dids: string[]) => {
+    asked.push([...dids].sort());
+    return new Map(dids.map((d) => [d, `avatar-${d}-${repos.find((r) => r.did === d)!.rev}`]));
+  };
+  const avatarOf = (did: string) =>
+    (db.prepare("SELECT avatar FROM accounts WHERE did = ?").get(did) as { avatar: string }).avatar;
+
+  await syncer.fullSync();
+  assert.deepEqual(asked.pop(), ["did:plc:a", "did:plc:b"], "first sync reads every profile");
+
+  await syncer.fullSync();
+  assert.deepEqual(asked.pop(), [], "nothing moved, nothing re-read");
+  assert.equal(avatarOf("did:plc:a"), "avatar-did:plc:a-1", "unchanged avatar is kept");
+
+  repos = [{ did: "did:plc:a", rev: "2" }, { did: "did:plc:b", rev: "1" }, { did: "did:plc:c", rev: "1" }];
+  await syncer.fullSync();
+  assert.deepEqual(asked.pop(), ["did:plc:a", "did:plc:c"], "moved rev + new account only");
+  assert.equal(avatarOf("did:plc:a"), "avatar-did:plc:a-2");
+  assert.equal(avatarOf("did:plc:b"), "avatar-did:plc:b-1");
+});
