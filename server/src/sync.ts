@@ -250,13 +250,16 @@ export class Syncer {
         });
       }
       // drop accounts (and their labels/activity/blob sizes) that no longer exist on the PDS
-      const params = dids.map(() => "?").join(",");
       this.db.prepare(`DELETE FROM labels WHERE did NOT IN (SELECT did FROM accounts)`).run();
       this.db.prepare(`DELETE FROM activity WHERE did NOT IN (SELECT did FROM accounts)`).run();
       this.db.prepare(`DELETE FROM blob_sizes WHERE did NOT IN (SELECT did FROM accounts)`).run();
       this.db.prepare(`DELETE FROM activity WHERE hour < date('now', '-400 days')`).run();
       if (dids.length > 0) {
-        this.db.prepare(`DELETE FROM accounts WHERE did NOT IN (${params})`).run(...dids);
+        // one JSON-array parameter instead of one bound variable per account: SQLite
+        // caps a statement at 32766 variables, which a large PDS exceeds
+        this.db
+          .prepare(`DELETE FROM accounts WHERE did NOT IN (SELECT value FROM json_each(?))`)
+          .run(JSON.stringify(dids));
       }
     })();
 
