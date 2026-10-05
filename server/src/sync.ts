@@ -9,6 +9,10 @@ const FULL_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 // a changed repo is re-measured at most this often, so busy accounts don't cost a
 // CAR download on every sync
 const STORAGE_REMEASURE_MS = 6 * 60 * 60 * 1000;
+// STORAGE_SWEEP=off skips per-account storage measurement entirely. Its first pass
+// downloads every repo CAR and requests every blob, which on a large PDS means
+// millions of blob-store reads; with it off the storage column stays empty.
+const STORAGE_SWEEP_ENABLED = process.env.STORAGE_SWEEP !== "off";
 const DIRTY_FLUSH_MS = 5_000;
 const RECONNECT_MS = 10_000;
 const FETCH_CONCURRENCY = 4;
@@ -158,6 +162,7 @@ export class Syncer {
 
     this.connectAccountStream();
     for (const labeler of this.labelers) this.connectLabelStream(labeler);
+    if (!STORAGE_SWEEP_ENABLED) this.log.info("storage sweep disabled (STORAGE_SWEEP=off)");
   }
 
   /** Shutdown seam: stop reconnects, tear down sockets, cancel timers, flush buffers. */
@@ -253,6 +258,7 @@ export class Syncer {
    * changed repos, so the sweep is cheap enough to run detached on every sync.
    */
   private async syncStorage() {
+    if (!STORAGE_SWEEP_ENABLED) return;
     if (this.sweepingStorage) return; // a slow sweep must not overlap the next one
     this.sweepingStorage = true;
     try {
