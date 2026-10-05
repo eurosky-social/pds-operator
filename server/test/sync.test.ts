@@ -165,3 +165,28 @@ test("fullSync re-reads avatars only for new accounts and moved revs", async () 
   assert.equal(avatarOf("did:plc:a"), "avatar-did:plc:a-2");
   assert.equal(avatarOf("did:plc:b"), "avatar-did:plc:b-1");
 });
+
+test("fullSync handles more accounts than SQLite's bound-variable limit", async () => {
+  // SQLite caps a statement at 32766 bound variables; one per account used to
+  // abort the whole full-sync transaction on a large PDS.
+  const total = 40_000;
+  let repos = Array.from({ length: total }, (_, i) => ({ did: `did:plc:${i}`, rev: "1" }));
+  const pds = {
+    hostname: "pds.test",
+    listAllRepos: async () => repos,
+    accountInfos: async (dids: string[]) => dids.map((did) => ({ did, handle: `${did}.test`, indexedAt: "" })),
+  } as unknown as PdsClient;
+  const db = openDb(":memory:");
+  const syncer = new Syncer(db, pds, [], stubLogger);
+  (syncer as any).syncStorage = async () => {};
+  (syncer as any).fetchAvatars = async () => new Map();
+  const count = () => (db.prepare("SELECT COUNT(*) AS n FROM accounts").get() as { n: number }).n;
+
+  await (syncer as any).fullSyncInner();
+  assert.equal(count(), total);
+
+  repos = repos.slice(1); // one account left the PDS
+  await (syncer as any).fullSyncInner();
+  assert.equal(count(), total - 1, "accounts gone from the PDS are pruned");
+  assert.equal(db.prepare("SELECT 1 FROM accounts WHERE did = 'did:plc:0'").get(), undefined);
+});
