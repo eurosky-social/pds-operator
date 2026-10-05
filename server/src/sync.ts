@@ -201,7 +201,25 @@ export class Syncer {
       this.pds.accountInfos(batch),
     );
     const infoByDid = new Map(infoBatches.flat().map((i) => [i.did, i]));
-    const avatarByDid = await this.fetchAvatars(dids);
+    // Only re-read profiles for new accounts and repos whose rev moved: an avatar
+    // change is a commit, so an unchanged rev means an unchanged avatar (and the
+    // firehose refresh has usually caught it already). Re-reading every profile on
+    // every sync costs one getRecord per account per tick on a large PDS.
+    const known = new Map(
+      (
+        this.db.prepare("SELECT did, rev, avatar FROM accounts").all() as {
+          did: string;
+          rev: string;
+          avatar: string | null;
+        }[]
+      ).map((r) => [r.did, r]),
+    );
+    const revOf = (repo: RepoEntry) => repo.rev ?? repo.head ?? "";
+    const changed = repos
+      .filter((repo) => known.get(repo.did)?.rev !== revOf(repo))
+      .map((repo) => repo.did);
+    const avatarByDid = await this.fetchAvatars(changed);
+    const fetched = new Set(changed);
 
     const upsert = this.db.prepare(`
       INSERT INTO accounts (did, handle, email, indexed_at, status, avatar, rev, updated_at)
@@ -224,8 +242,10 @@ export class Syncer {
           email: info?.email ?? null,
           indexed_at: info?.indexedAt ?? "",
           status: repoStatusToAccountStatus(repo),
-          avatar: avatarByDid.get(repo.did) ?? null,
-          rev: repo.rev ?? repo.head ?? "",
+          avatar: fetched.has(repo.did)
+            ? (avatarByDid.get(repo.did) ?? null)
+            : (known.get(repo.did)?.avatar ?? null),
+          rev: revOf(repo),
           updated_at: Date.now(),
         });
       }
