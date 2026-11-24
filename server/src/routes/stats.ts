@@ -50,8 +50,7 @@ export function registerStatsRoutes(
 
     const now = Date.now();
 
-    // signups per calendar month in the viewer's timezone, trailing `months` incl. empty.
-    // indexed_at is a UTC ISO string, so bucket the few hundred rows in JS rather than SQL
+    // signups per calendar month in the viewer's timezone, trailing `months` incl. empty
     const monthKeys: string[] = [];
     {
       let [y, m] = localDay(new Date(now)).split("-").map(Number);
@@ -64,17 +63,33 @@ export function registerStatsRoutes(
         }
       }
     }
-    const signupCounts = new Map(monthKeys.map((k) => [k, 0]));
-    const indexedRows = db
-      .prepare("SELECT indexed_at FROM accounts WHERE indexed_at != ''")
-      .all() as { indexed_at: string }[];
-    for (const r of indexedRows) {
-      const d = new Date(r.indexed_at);
-      if (Number.isNaN(d.getTime())) continue;
-      const key = localDay(d).slice(0, 7);
-      if (signupCounts.has(key)) signupCounts.set(key, signupCounts.get(key)! + 1);
-    }
-    const signups = monthKeys.map((month) => ({ month, n: signupCounts.get(month)! }));
+    // indexed_at is a UTC ISO string, so each local month is a range of it: find the
+    // instant each month starts in the viewer's zone and count between them in SQL.
+    // Converting every account's timestamp costs seconds on a large PDS
+    const localMonth = (t: number) => localDay(new Date(t)).slice(0, 7);
+    const monthStart = (key: string) => {
+      // first instant whose local month is >= key; offsets stay within ±1 day
+      const [y, m] = key.split("-").map(Number);
+      let lo = Date.UTC(y, m - 1, 1) - 2 * 86_400_000;
+      let hi = Date.UTC(y, m - 1, 1) + 2 * 86_400_000;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (localMonth(mid) >= key) hi = mid;
+        else lo = mid + 1;
+      }
+      return new Date(lo).toISOString();
+    };
+    const [lastY, lastM] = monthKeys[monthKeys.length - 1].split("-").map(Number);
+    const nextMonth =
+      lastM === 12 ? `${lastY + 1}-01` : `${lastY}-${String(lastM + 1).padStart(2, "0")}`;
+    const bounds = [...monthKeys, nextMonth].map(monthStart);
+    const countSignups = db.prepare(
+      "SELECT COUNT(*) AS n FROM accounts WHERE indexed_at >= ? AND indexed_at < ?",
+    );
+    const signups = monthKeys.map((month, i) => ({
+      month,
+      n: (countSignups.get(bounds[i], bounds[i + 1]) as { n: number }).n,
+    }));
 
     // watched labels only, counted by distinct account, merged by raw label value
     const labelRows = db
@@ -95,12 +110,15 @@ export function registerStatsRoutes(
     const hourCutoff = (offsetDays: number) =>
       new Date(now - offsetDays * 86_400_000).toISOString().slice(0, 13);
     // active/dormant split excludes taken-down accounts, so the two tiles sum to the
-    // account panel's default (hide taken down) count; deactivated counts as dormant
+    // account panel's default (hide taken down) count; deactivated counts as dormant.
+    // activity holds one row per (hour, did): collapse to distinct dids before the
+    // join, or a busy PDS joins millions of rows
     const { active } = db
       .prepare(
-        `SELECT COUNT(DISTINCT ev.did) AS active FROM activity ev
+        `SELECT COUNT(*) AS active
+         FROM (SELECT DISTINCT did FROM activity WHERE hour >= ?) ev
          JOIN accounts a ON a.did = ev.did
-         WHERE a.status != 'takendown' AND ev.hour >= ?`,
+         WHERE a.status != 'takendown'`,
       )
       .get(hourCutoff(activeDays)) as { active: number };
     const { dormant } = db
@@ -135,16 +153,27 @@ export function registerStatsRoutes(
 
     // average distinct writers per local day. Averaged over days the counter has
     // actually covered (it has no backfill), so a young install isn't dragged to zero
-    const pairRows = db
-      .prepare("SELECT DISTINCT hour, did FROM activity WHERE hour >= ?")
-      .all(hourCutoff(activeDays)) as { hour: string; did: string }[];
-    const didsByDay = new Map<string, Set<string>>();
-    for (const r of pairRows) {
-      const day = localDay(new Date(`${r.hour}:00:00Z`));
-      const set = didsByDay.get(day) ?? new Set<string>();
-      set.add(r.did);
-      didsByDay.set(day, set);
+    // Counted in SQL: the window holds one row per (hour, did), millions on a busy PDS,
+    // too many to pull into JS. The hour -> local day map (one entry per hour of the
+    // window) goes in as a single JSON parameter
+    const activeCutoff = hourCutoff(activeDays);
+    const hourToDay: Record<string, string> = {};
+    for (
+      let t = Date.parse(`${activeCutoff}:00:00Z`);
+      t <= now + 3_600_000;
+      t += 3_600_000
+    ) {
+      const d = new Date(t);
+      hourToDay[d.toISOString().slice(0, 13)] = localDay(d);
     }
+    const dauRows = db
+      .prepare(
+        `SELECT m.value AS day, COUNT(DISTINCT ev.did) AS n
+         FROM activity ev JOIN json_each(?) m ON m.key = ev.hour
+         WHERE ev.hour >= ? GROUP BY m.value`,
+      )
+      .all(JSON.stringify(hourToDay), activeCutoff) as { day: string; n: number }[];
+    const dauByDay = new Map(dauRows.map((r) => [r.day, r.n]));
     const firstHour = (
       db.prepare("SELECT MIN(hour) AS h FROM activity").get() as { h: string | null }
     ).h;
@@ -155,16 +184,18 @@ export function registerStatsRoutes(
       const day = localDay(new Date(now - i * 86_400_000));
       if (firstDay == null || day < firstDay) continue;
       coveredDays += 1;
-      dauSum += didsByDay.get(day)?.size ?? 0;
+      dauSum += dauByDay.get(day) ?? 0;
     }
     const avgDailyActive = coveredDays > 0 ? dauSum / coveredDays : 0;
 
+    // sum per did first, join the accounts afterwards (see `active`)
     const topAccounts = db
       .prepare(
-        `SELECT a.did, a.handle, a.avatar, SUM(ev.events) AS n
-         FROM activity ev JOIN accounts a ON a.did = ev.did
-         WHERE a.status != 'takendown' AND ev.hour >= ?
-         GROUP BY ev.did ORDER BY n DESC LIMIT 5`,
+        `SELECT a.did, a.handle, a.avatar, ev.n
+         FROM (SELECT did, SUM(events) AS n FROM activity WHERE hour >= ? GROUP BY did) ev
+         JOIN accounts a ON a.did = ev.did
+         WHERE a.status != 'takendown'
+         ORDER BY ev.n DESC LIMIT 5`,
       )
       .all(hourCutoff(activeDays)) as {
       did: string;

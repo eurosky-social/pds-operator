@@ -31,6 +31,9 @@ export function openDb(file?: string) {
     path.join(path.dirname(fileURLToPath(import.meta.url)), "../data.sqlite");
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
+  // temp B-trees (large GROUP BY/ORDER BY) in memory: no temp files, so a
+  // read-only container root does not turn big sorts into "disk I/O error"
+  db.pragma("temp_store = MEMORY");
   db.exec(`
     CREATE TABLE IF NOT EXISTS accounts (
       did TEXT PRIMARY KEY,
